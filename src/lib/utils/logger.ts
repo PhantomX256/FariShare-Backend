@@ -1,5 +1,4 @@
 import {DEP_MODE} from "../constants.ts";
-import {isStringObject} from "node:util/types";
 
 type LogLevel = "INFO" | "WARN" | "ERROR" | "DEBUG";
 
