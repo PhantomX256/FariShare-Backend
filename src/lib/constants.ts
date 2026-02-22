@@ -11,3 +11,9 @@ export const STATUS_CODES = {
     NOT_FOUND: 404,
     INTERNAL_SERVER_ERROR: 500,
 }
+
+// Database connection string
+export const DATABASE_CONNECTION_STRING = process.env["DATABASE_URL"];
+
+// Deployment mode
+export const DEP_MODE = process.env["MODE"] || "PROD";

@@ -1,3 +1,6 @@
+import {DEP_MODE} from "../constants.ts";
+import {isStringObject} from "node:util/types";
+
 type LogLevel = "INFO" | "WARN" | "ERROR" | "DEBUG";
 
 function getCallerInfo(): { file: string; func: string } {
@@ -20,22 +23,36 @@ function getCallerInfo(): { file: string; func: string } {
     return { file, func };
 }
 
-function log(level: LogLevel, message: string): void {
+function log(level: LogLevel, message: string | any): void {
+    // Generate current timestamp
     const now = new Date();
-
     const date = now.toLocaleDateString("en-CA"); // YYYY-MM-DD
     const timestamp = now.toLocaleTimeString("en-GB", { hour12: false }); // HH:MM:SS
 
+    // Get the file and function name
     const { file, func } = getCallerInfo();
 
-    console.log(`[${date}] [${timestamp}] [${level}] [${func}()] [${file}] [${message}]`);
+    if (typeof message !== "string") {
+        console.log(`[${date}] [${timestamp}] [${level}] [${func}()] [${file}] Error Object: `);
+        console.log(message);
+    } else {
+        // log into the console
+        console.log(`[${date}] [${timestamp}] [${level}] [${func}()] [${file}] ${message}`);
+    }
 }
 
+/**
+ *  A simple logger that has 4 methods:
+ *  - `info`: For general information
+ *  - `warn`: To warn of something missing or something going wrong
+ *  - `error`: Something was critical and the program has stopped or didn't go as expected
+ *  - `debug`: Just dev logs if needed
+ */
 const logger = {
     info: (msg: string) => log("INFO", msg),
     warn: (msg: string) => log("WARN", msg),
     error: (msg: string) => log("ERROR", msg),
-    debug: (msg: string) => log("DEBUG", msg),
+    debug: (msg: any) => { DEP_MODE === "DEV" && log("DEBUG", msg) }
 };
 
 export default logger;
