@@ -16,4 +16,13 @@ export const STATUS_CODES = {
 export const DATABASE_CONNECTION_STRING = process.env["DATABASE_URL"];
 
 // Deployment mode
-export const DEP_MODE = process.env["MODE"] || "PROD";
+export const DEP_MODE: "DEV" | "PROD" = process.env["MODE"] === "DEV" ? "DEV" : "PROD";
+
+// Google Client ID
+export const GOOGLE_CLIENT_ID = process.env["GOOGLE_CLIENT_ID"];
+
+// JWT Secret
+export const JWT_SECRET = process.env["JWT_SECRET"]!;
+
+// Frontend Hosted URL
+export const FRONTEND_URL = process.env["FRONTEND_URL"]!;

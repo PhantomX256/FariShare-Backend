@@ -67,7 +67,7 @@ src/
 ├── server.ts            # HTTP server entry point (listens on PORT)
 ├── middleware/
 │   ├── auth.ts          # JWT verification middleware → attaches req.user
-│   └── validate.ts      # Zod request validation middleware factory
+│   └── validate.middleware.ts      # Zod request validation middleware factory
 ├── routes/
 │   └── <resource>.ts    # One file per REST resource (e.g. groups.ts, expenses.ts)
 ├── db/
@@ -78,7 +78,7 @@ src/
     └── express.d.ts     # Augments Express Request to include req.user
 ```
 
-- **Never** put business logic in route files — keep routes thin (parse → validate → call logic → respond).
+- **Never** put business logic in route files — keep routes thin (parse → validateMiddleware → call logic → respond).
 - Schema files in `src/db/schema/` define Drizzle table definitions. Each domain gets its own file.
 
 ---
@@ -105,7 +105,7 @@ Create a `.env` file at the root of the project. **Never commit it.**
 
 ### Request Validation
 - All request bodies and query params **must** be validated with a `zod` schema
-- Use the `validate` middleware factory to keep route handlers clean
+- Use the `validateMiddleware` middleware factory to keep route handlers clean
 
 ### Response Shape
 - Response shape is determined per endpoint as the project evolves
@@ -136,6 +136,6 @@ When adding a new resource (e.g. `expenses`):
 1. **Define the Drizzle schema** in `src/db/schema/expenses.ts`
 2. **Create the route file** at `src/routes/expenses.ts`
 3. **Register the router** in `src/app.ts` under `/api/expenses`
-4. **Validate all inputs** with `zod` using the `validate` middleware
+4. **Validate all inputs** with `zod` using the `validateMiddleware` middleware
 5. **Protect all non-public routes** with the `auth` middleware
 6. **Never** bypass the auth middleware on routes that touch user data
