@@ -1,3 +1,6 @@
+/**
+ *  Custom error class used by global error handler
+ */
 export class APIError extends Error {
     public statusCode: number;
     public isOperational: boolean;

@@ -7,6 +7,7 @@ import cors from "cors";
 import {FRONTEND_URL, STATUS_CODES} from "./lib/constants.ts";
 import cookieParser from "cookie-parser";
 import authRoutes from "./routes/auth.route.ts";
+import {logRequest} from "./middlewares/logger.middleware.ts";
 
 // Create an Express application
 const app = express();
@@ -25,11 +26,16 @@ app.use(express.json());
 // Use Cookie Parser
 app.use(cookieParser());
 
+// Middleware to log the requests
+app.use("/api/*", logRequest);
+
+// Mounting all routes
 app.use("/api/auth", authRoutes);
 
 // Protect app routes behind jwt middleware
 app.use("/api/app/*", verifyToken);
 
+// Handling all 404 errors
 app.all("*", (req, res, next) => {
     next(new APIError(STATUS_CODES.NOT_FOUND, `Can't find ${req.originalUrl} on this server!`));
 });

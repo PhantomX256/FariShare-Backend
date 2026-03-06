@@ -1,16 +1,15 @@
 import app from "./app.ts";
-import {GOOGLE_CLIENT_ID, PORT} from "./lib/constants.ts";
+import {FRONTEND_URL, GOOGLE_CLIENT_ID, JWT_SECRET, PORT} from "./lib/constants.ts";
 import logger from "./lib/utils/logger.ts";
 import db from "./database/client.ts";
 import { sql } from "drizzle-orm";
 
 async function startServer(port: string | undefined) {
     // If in case the database orm interface is null, meaning the
-    // DATABASE_CONNECTION in env was not set or if
-    // GOOGLE CLIENT ID is not set, don't start
-    if (!db || !GOOGLE_CLIENT_ID) {
-        if (!GOOGLE_CLIENT_ID)
-            logger.error("GOOGLE CLIENT ID is not set");
+    // DATABASE_URL in env was not set or if
+    // GOOGLE CLIENT ID, JWT_SECRET, FRONTEND_URL is not set, don't start
+    if (!db || !GOOGLE_CLIENT_ID || !JWT_SECRET || !FRONTEND_URL) {
+        logger.error("Env variables missing.");
         process.exit(1);
     }
 
