@@ -1,6 +1,6 @@
 import type {NextFunction, Request, Response} from "express";
 import {ZodError, ZodType} from "zod";
-import {STATUS_CODES} from "../lib/constants.ts";
+import {RESPONSE_STATUS, STATUS_CODES} from "../lib/constants.ts";
 import logger from "../lib/utils/logger.ts";
 
 /**
@@ -29,7 +29,7 @@ export function validateMiddleware(schema: ZodType) {
             // associated with that field from zod
             if (error instanceof ZodError) {
                 return res.status(STATUS_CODES.BAD_REQUEST).json({
-                    status: "error",
+                    status: RESPONSE_STATUS.ERROR,
                     message: error.issues.map((e) => {
                         logger.debug(e.message);
                         return e.message;

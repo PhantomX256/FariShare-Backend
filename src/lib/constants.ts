@@ -26,3 +26,9 @@ export const JWT_SECRET = process.env["JWT_SECRET"]!;
 
 // Frontend Hosted URL
 export const FRONTEND_URL = process.env["FRONTEND_URL"]!;
+
+// Response status
+export const RESPONSE_STATUS = {
+    SUCCESS: "success",
+    ERROR: "error"
+}

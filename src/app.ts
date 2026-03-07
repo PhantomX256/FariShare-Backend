@@ -8,6 +8,7 @@ import {FRONTEND_URL, STATUS_CODES} from "./lib/constants.ts";
 import cookieParser from "cookie-parser";
 import authRoutes from "./routes/auth.route.ts";
 import {logRequest} from "./middlewares/logger.middleware.ts";
+import userRoutes from "./routes/user.route.ts";
 
 // Create an Express application
 const app = express();
@@ -29,11 +30,12 @@ app.use(cookieParser());
 // Middleware to log the requests
 app.use("/api/*", logRequest);
 
-// Mounting all routes
-app.use("/api/auth", authRoutes);
-
 // Protect app routes behind jwt middleware
 app.use("/api/app/*", verifyToken);
+
+// Mounting all routes
+app.use("/api/auth", authRoutes);
+app.use("/api/app/user", userRoutes);
 
 // Handling all 404 errors
 app.all("*", (req, res, next) => {

@@ -29,24 +29,26 @@ export async function getJWTFromTokenAndInsertIntoDb(credential: string) {
     // and get back the id of the user
     const [user] = await db!.insert(usersTable)
         .values({
-            full_name: payload?.name,
-            email: payload?.email,
-            avatar_url: payload?.picture
+            full_name: payload!.name!,
+            email: payload!.email!,
+            avatar_url: payload!.picture!
         })
         .onConflictDoUpdate({
             target: usersTable.email,
             set: {
-                full_name: payload?.name,
-                avatar_url: payload?.picture
+                full_name: payload!.name,
+                avatar_url: payload!.picture
             }
         })
-        .returning({ id: usersTable.id });
+        .returning();
     logger.debug(`User data inserted into database. UserID: ${user!.id}`);
 
-    // Sign a JWT with the user's id and return it
-    return jwt.sign(
+    // Sign a JWT with the user's id
+     const token = jwt.sign(
         { id: user!.id },
         JWT_SECRET,
         {expiresIn: "7d"} // expires in 7 days
     );
+
+     return { token, user };
 }

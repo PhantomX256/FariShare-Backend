@@ -1,4 +1,4 @@
-import {DEP_MODE, STATUS_CODES} from "../lib/constants.ts";
+import {DEP_MODE, RESPONSE_STATUS, STATUS_CODES} from "../lib/constants.ts";
 import type { Request, Response } from "express";
 import {getJWTFromTokenAndInsertIntoDb} from "../services/auth.service.ts";
 import logger from "../lib/utils/logger.ts";
@@ -12,7 +12,7 @@ export async function authenticateWithGoogle(req: Request, res: Response) {
     const { credential } = req.body;
 
     // Get the JWT from service layer
-    const token = await getJWTFromTokenAndInsertIntoDb(credential);
+    const { token, user } = await getJWTFromTokenAndInsertIntoDb(credential);
     logger.debug("JWT created successfully");
 
     // Embed the JWT into the client's cookies
@@ -25,7 +25,25 @@ export async function authenticateWithGoogle(req: Request, res: Response) {
     logger.debug("Cookie embedded into client");
 
     return res.status(STATUS_CODES.CREATED).json({
-        status: "success",
-        message: "Authenticated successfully"
+        status: RESPONSE_STATUS.SUCCESS,
+        message: "Authenticated successfully",
+        user
+    });
+}
+
+/**
+ *  Simple logout function that clears the token from cookies
+ */
+export function logout(req: Request, res: Response) {
+    res.clearCookie("token", {
+        httpOnly: true,
+        secure: DEP_MODE === "PROD",
+        sameSite: "strict",
+    });
+    logger.debug("Cookie cleared from client");
+
+    return res.status(STATUS_CODES.OK).json({
+        status: RESPONSE_STATUS.SUCCESS,
+        message: "Logged out successfully"
     });
 }
