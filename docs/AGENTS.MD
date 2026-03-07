@@ -31,6 +31,7 @@ Express Backend (this repo)
         │  3. Upsert user into Postgres via drizzle-orm
         │  4. Sign a JWT (jsonwebtoken) with { id: user.id }
         │  5. Set JWT as HTTP-only cookie on the response
+        │  6. Return { status, message, user } to the client
         ▼
 Postgres Database (Supabase-hosted)
 ```
@@ -70,7 +71,8 @@ src/
 ├── app.ts                          # Express app setup (middleware, CORS, route registration)
 ├── server.ts                       # HTTP server entry point (startup checks, listens on PORT)
 ├── controllers/
-│   └── auth.controller.ts          # Handles auth requests, sets cookie, returns response
+│   ├── auth.controller.ts          # Handles auth requests (Google login, logout), sets/clears cookie, returns response
+│   └── user.controller.ts          # Handles user data requests (fetch current user)
 ├── database/
 │   ├── client.ts                   # postgres.js + drizzle-orm singleton client
 │   └── schemas/
@@ -78,7 +80,7 @@ src/
 ├── errors/
 │   └── api.error.ts                # APIError class (operational errors)
 ├── lib/
-│   ├── constants.ts                # All env variable exports + STATUS_CODES
+│   ├── constants.ts                # All env variable exports + STATUS_CODES + RESPONSE_STATUS
 │   └── utils/
 │       └── logger.ts               # Singleton Logger class (INFO/WARN/ERROR/DEBUG)
 ├── middlewares/
@@ -87,9 +89,12 @@ src/
 │   ├── logger.middleware.ts        # logRequest — logs every /api/* request at DEBUG level
 │   └── validate.middleware.ts      # validateMiddleware factory — Zod schema validation
 ├── routes/
-│   └── auth.route.ts               # POST /google route
+│   ├── auth.route.ts               # POST /google, POST /logout
+│   └── user.route.ts               # POST /me (protected)
 ├── services/
-│   └── auth.service.ts             # Google token verification, DB upsert, JWT signing
+│   ├── auth.service.ts             # Google token verification, DB upsert, JWT signing
+│   ├── group.service.ts            # (empty — reserved for group logic)
+│   └── user.service.ts             # Fetch user data by ID from the database
 └── validators/
     └── auth.validator.ts           # Zod schema for Google auth request body
 ```
@@ -141,6 +146,15 @@ The server **will not start** if `DATABASE_URL`, `GOOGLE_CLIENT_ID`, `JWT_SECRET
 - Schemas must wrap fields under `body`, `query`, and/or `params` keys to match `{ body: req.body, query: req.query, params: req.params }`.
 - On failure, returns `400` with an array of Zod error messages.
 - Use `ZodType` (not the deprecated `ZodTypeAny`) for the schema parameter type.
+- In Zod v4, use the `error:` callback (not `message:`) for custom error messages. Example:
+  ```ts
+  z.string({ error: issue => issue.input === undefined ? "Field is required" : "Invalid value" })
+  ```
+
+### Constants (`src/lib/constants.ts`)
+- `STATUS_CODES` — HTTP status code map (OK, CREATED, BAD_REQUEST, UNAUTHORIZED, FORBIDDEN, NOT_FOUND, INTERNAL_SERVER_ERROR).
+- `RESPONSE_STATUS` — Standard response status strings: `{ SUCCESS: "success", ERROR: "error" }`. Always use this in JSON responses instead of hardcoding strings.
+- `DEP_MODE` — `"DEV"` or `"PROD"` (derived from `process.env.MODE`).
 
 ### CORS
 - Configured in `app.ts` to allow only `FRONTEND_URL` origin with `credentials: true`.
@@ -167,9 +181,10 @@ The server **will not start** if `DATABASE_URL`, `GOOGLE_CLIENT_ID`, `JWT_SECRET
 - All request bodies and query params **must** be validated with a Zod schema using `validateMiddleware`.
 
 ### Response Shape
-- Success: `{ status: "success", message: "..." }` with appropriate `2xx` status code.
+- Success: `{ status: "success", message: "..." }` with appropriate `2xx` status code. Additional data fields (e.g. `user`) may be included at the top level.
 - Error: `{ status: "error", message: "..." | string[] }` with appropriate `4xx/5xx` status code.
 - Always use `STATUS_CODES` from `src/lib/constants.ts` — never hardcode numbers.
+- Always use `RESPONSE_STATUS` from `src/lib/constants.ts` for the `status` field — never hardcode `"success"` or `"error"`.
 
 ### Authentication
 - After `verifyToken` runs, `req.user.id` (the user's UUID) is available in the handler.
@@ -177,7 +192,24 @@ The server **will not start** if `DATABASE_URL`, `GOOGLE_CLIENT_ID`, `JWT_SECRET
 
 ---
 
-## 8. Database Schema
+## 8. Implemented Endpoints
+
+### Auth (`/api/auth`)
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `POST` | `/api/auth/google` | ❌ | Verifies Google ID Token, upserts user, sets JWT cookie. Returns `{ status, message, user }`. |
+| `POST` | `/api/auth/logout` | ❌ | Clears the `token` cookie. Returns `{ status, message }`. |
+
+### User (`/api/app/user`)
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `POST` | `/api/app/user/me` | ✅ | Returns the authenticated user's data from the database using `req.user.id`. |
+
+---
+
+## 9. Database Schema
 
 ### `users` table (`src/database/schemas/users.ts`)
 
@@ -197,7 +229,7 @@ The server **will not start** if `DATABASE_URL`, `GOOGLE_CLIENT_ID`, `JWT_SECRET
 
 ---
 
-## 9. TypeScript Config
+## 10. TypeScript Config
 
 Key settings in `tsconfig.json`:
 - `strict: true` — all strict checks enabled
@@ -210,7 +242,7 @@ All internal imports must include the `.ts` extension (e.g. `import foo from "./
 
 ---
 
-## 10. Adding New Features (Agent Instructions)
+## 11. Adding New Features (Agent Instructions)
 
 When adding a new resource (e.g. `expenses`):
 
@@ -224,3 +256,4 @@ When adding a new resource (e.g. `expenses`):
 8. All routes under `/api/app/*` are **automatically protected** by `verifyToken` — no need to add it per-route
 9. Throw `new APIError(STATUS_CODES.X, "message")` for all expected errors — never `res.status(...).json(...)` for errors
 10. Always import env variables from `src/lib/constants.ts`, never from `process.env` directly
+11. Always use `RESPONSE_STATUS.SUCCESS` / `RESPONSE_STATUS.ERROR` in JSON responses — never hardcode strings
