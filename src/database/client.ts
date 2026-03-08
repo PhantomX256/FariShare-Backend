@@ -7,20 +7,22 @@ import logger from "../lib/utils/logger.ts";
     Creates a database client and returns the drizzle orm interface
  */
 function createDatabaseConnection(connectionString: string | undefined) {
-    // If the connection string is not set in .env log it and return null
-    if (!connectionString) {
-        logger.error("Database connection string not set in environmental variables");
-        return null;
-    }
+	// If the connection string is not set in .env log it and return null
+	if (!connectionString) {
+		logger.error(
+			"Database connection string not set in environmental variables",
+		);
+		return null;
+	}
 
-    // Create a postgres client using connection string
-    const client = postgres(connectionString!, { prepare: false });
-    logger.debug("Postgres client created");
+	// Create a postgres client using connection string
+	const client = postgres(connectionString!, { prepare: false });
+	logger.debug("Postgres client created");
 
-    // Create drizzle interface
-    const db = drizzle(client);
-    logger.debug("Drizzle interface created successfully");
-    return db;
+	// Create drizzle interface
+	const db = drizzle(client);
+	logger.debug("Drizzle interface created successfully");
+	return db;
 }
 
 const db = createDatabaseConnection(DATABASE_CONNECTION_STRING);

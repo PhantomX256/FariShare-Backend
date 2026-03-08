@@ -1,7 +1,7 @@
-import {GOOGLE_CLIENT_ID, JWT_SECRET} from "../lib/constants.ts";
+import { GOOGLE_CLIENT_ID, JWT_SECRET } from "../lib/constants.ts";
 import logger from "../lib/utils/logger.ts";
-import {OAuth2Client} from "google-auth-library";
-import {usersTable} from "../database/schemas/users.ts";
+import { OAuth2Client } from "google-auth-library";
+import { usersTable } from "../database/schemas/users.ts";
 import db from "../database/client.ts";
 import jwt from "jsonwebtoken";
 
@@ -14,41 +14,42 @@ logger.debug("Google OAuth Client created successfully");
  *  and returns a JWT
  */
 export async function getJWTFromTokenAndInsertIntoDb(credential: string) {
-    // Verify the token from Google
-    const ticket = await client.verifyIdToken({
-        idToken: credential,
-        audience: GOOGLE_CLIENT_ID
-    });
-    logger.debug("Token verified from Google");
+	// Verify the token from Google
+	const ticket = await client.verifyIdToken({
+		idToken: credential,
+		audience: GOOGLE_CLIENT_ID,
+	});
+	logger.debug("Token verified from Google");
 
-    // Get the user's details
-    const payload = ticket.getPayload();
-    logger.debug("User details retrieved from Google");
+	// Get the user's details
+	const payload = ticket.getPayload();
+	logger.debug("User details retrieved from Google");
 
-    // Insert the relevant data into the database
-    // and get back the id of the user
-    const [user] = await db!.insert(usersTable)
-        .values({
-            full_name: payload!.name!,
-            email: payload!.email!,
-            avatar_url: payload!.picture!
-        })
-        .onConflictDoUpdate({
-            target: usersTable.email,
-            set: {
-                full_name: payload!.name,
-                avatar_url: payload!.picture
-            }
-        })
-        .returning();
-    logger.debug(`User data inserted into database. UserID: ${user!.id}`);
+	// Insert the relevant data into the database
+	// and get back the id of the user
+	const [user] = await db!
+		.insert(usersTable)
+		.values({
+			full_name: payload!.name!,
+			email: payload!.email!,
+			avatar_url: payload!.picture!,
+		})
+		.onConflictDoUpdate({
+			target: usersTable.email,
+			set: {
+				full_name: payload!.name,
+				avatar_url: payload!.picture,
+			},
+		})
+		.returning();
+	logger.debug(`User data inserted into database. UserID: ${user!.id}`);
 
-    // Sign a JWT with the user's id
-     const token = jwt.sign(
-        { id: user!.id },
-        JWT_SECRET,
-        {expiresIn: "7d"} // expires in 7 days
-    );
+	// Sign a JWT with the user's id
+	const token = jwt.sign(
+		{ id: user!.id },
+		JWT_SECRET,
+		{ expiresIn: "7d" }, // expires in 7 days
+	);
 
-     return { token, user };
+	return { token, user };
 }
