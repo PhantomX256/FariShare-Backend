@@ -9,6 +9,7 @@ import cookieParser from "cookie-parser";
 import authRoutes from "./routes/auth.route.ts";
 import { logRequest } from "./middlewares/logger.middleware.ts";
 import userRoutes from "./routes/user.route.ts";
+import friendRoute from "./routes/friend.route.ts";
 
 // Create an Express application
 const app = express();
@@ -38,6 +39,7 @@ app.use("/api/app/*", verifyToken);
 // Mounting all routes
 app.use("/api/auth", authRoutes);
 app.use("/api/app/user", userRoutes);
+app.use("/api/app/friend", friendRoute);
 
 // Handling all 404 errors
 app.all("*", (req, res, next) => {
