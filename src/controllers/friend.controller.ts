@@ -1,10 +1,12 @@
-import type { Request, Response } from "express";
+import type { NextFunction, Request, Response } from "express";
 import {
 	acceptFriendRequest,
 	getAllFriendIdsOfUser,
 	getAllFriendRequestsReceivedByUser,
-	getAllFriendRequestsSentByUser, removeFriendRequest,
-	sendFriendRequestToUser, validateFriendRequestAction,
+	getAllFriendRequestsSentByUser,
+	removeFriendRequest,
+	sendFriendRequestToUser,
+	validateFriendRequestAction,
 } from "../services/friend.service.ts";
 import logger from "../lib/utils/logger.ts";
 import { getUserDataByInternalIds } from "../services/user.service.ts";
@@ -27,24 +29,37 @@ export async function getUserDataOfFriendsOfCurrentUser(
 	});
 }
 
-export async function sendFriendRequest(req: Request, res: Response) {
-	const { friendId } = req.body;
+export async function sendFriendRequest(
+	req: Request,
+	res: Response,
+	next: NextFunction,
+) {
+	try {
+		const { friend } = req.body;
 
-	await sendFriendRequestToUser(req.user!.id, friendId);
+		await sendFriendRequestToUser(req.user!.id, friend);
+		logger.debug(
+			`Successfully sent a request by: ${req.user!.id} to ${friend}`,
+		);
 
-	return res.status(STATUS_CODES.CREATED).json({
-		status: RESPONSE_STATUS.SUCCESS,
-		message: "Friend request sent",
-	});
+		return res.status(STATUS_CODES.CREATED).json({
+			status: RESPONSE_STATUS.SUCCESS,
+			message: "Friend request sent",
+		});
+	} catch (err) {
+		next(err);
+	}
 }
 
 export async function getSentFriendRequest(req: Request, res: Response) {
-	const sentFriendRequests = await getAllFriendRequestsSentByUser(req.user!.id);
+	const sentFriendRequests = await getAllFriendRequestsSentByUser(
+		req.user!.id,
+	);
 
 	return res.status(STATUS_CODES.OK).json({
 		status: RESPONSE_STATUS.SUCCESS,
 		message: "Retrieved all sent requests",
-		sentFriendRequests
+		sentFriendRequests,
 	});
 }
 

@@ -6,12 +6,12 @@ import { eq, inArray } from "drizzle-orm";
  *  Get the user's data from the database
  */
 export async function getUserDataById(userId: string) {
-	const result = await db!
+	const [user] = await db!
 		.select()
 		.from(usersTable)
 		.where(eq(usersTable.id, userId))
 		.limit(1);
-	return result[0];
+	return user;
 }
 
 /**

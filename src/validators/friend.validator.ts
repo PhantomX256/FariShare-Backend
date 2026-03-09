@@ -2,12 +2,20 @@ import { z } from "zod";
 
 export const SendFriendRequestSchema = z.object({
 	body: z.object({
-		friendId: z.string({
-			error: (issue) =>
-				issue.input === undefined
-					? "No friendID provided"
-					: "Invalid friendId",
-		}),
+		friend: z.union([
+			z.email({
+				error: (issue) =>
+					issue.input === undefined
+						? "No email provided"
+						: "Invalid email",
+			}),
+			z.uuid({
+				error: (issue) =>
+					issue.input === undefined
+						? "No ID provided"
+						: "Invalid ID",
+			}),
+		]),
 	}),
 });
 
