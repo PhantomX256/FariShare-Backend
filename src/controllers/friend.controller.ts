@@ -1,25 +1,21 @@
 import type { NextFunction, Request, Response } from "express";
 import {
 	acceptFriendRequest,
-	getAllFriendIdsOfUser,
 	getAllFriendRequestsReceivedByUser,
 	getAllFriendRequestsSentByUser,
+	getAllFriendsOfUser,
 	removeFriendRequest,
 	sendFriendRequestToUser,
 	validateFriendRequestAction,
 } from "../services/friend.service.ts";
 import logger from "../lib/utils/logger.ts";
-import { getUserDataByInternalIds } from "../services/user.service.ts";
 import { RESPONSE_STATUS, STATUS_CODES } from "../lib/constants.ts";
 
 export async function getUserDataOfFriendsOfCurrentUser(
 	req: Request,
 	res: Response,
 ) {
-	const internalFriendIds = await getAllFriendIdsOfUser(req.user!.id);
-	logger.debug("Retrieved all the friend IDs of the user: " + req.user!.id);
-
-	const friendData = await getUserDataByInternalIds(internalFriendIds);
+	const friendData = await getAllFriendsOfUser(req.user!.id);
 	logger.debug("Successfully retrieved the data of all friends");
 
 	return res.status(STATUS_CODES.OK).json({
@@ -55,6 +51,7 @@ export async function getSentFriendRequest(req: Request, res: Response) {
 	const sentFriendRequests = await getAllFriendRequestsSentByUser(
 		req.user!.id,
 	);
+	logger.debug("Retrieved all requests sent by user: " + req.user!.id);
 
 	return res.status(STATUS_CODES.OK).json({
 		status: RESPONSE_STATUS.SUCCESS,
@@ -67,6 +64,7 @@ export async function getReceivedFriendRequest(req: Request, res: Response) {
 	const receivedFriendRequests = await getAllFriendRequestsReceivedByUser(
 		req.user!.id,
 	);
+	logger.debug("Retrieved all requests received by user: " + req.user!.id);
 
 	return res.status(STATUS_CODES.OK).json({
 		status: RESPONSE_STATUS.SUCCESS,
@@ -75,7 +73,11 @@ export async function getReceivedFriendRequest(req: Request, res: Response) {
 	});
 }
 
-export async function modifyFriendRequest(req: Request, res: Response, next: NextFunction) {
+export async function modifyFriendRequest(
+	req: Request,
+	res: Response,
+	next: NextFunction,
+) {
 	try {
 		const { senderId, receiverId, accept } = req.body;
 
@@ -85,11 +87,16 @@ export async function modifyFriendRequest(req: Request, res: Response, next: Nex
 			req.user!.id,
 			accept,
 		);
+		logger.debug(
+			"Validated friend request action by user: " + req.user!.id,
+		);
 
 		if (accept) {
 			await acceptFriendRequest(senderId, receiverId);
+			logger.debug("Successfully accepted friend request");
 		} else {
 			await removeFriendRequest(senderId, receiverId);
+			logger.debug("Successfully removed friend request");
 		}
 
 		return res.status(STATUS_CODES.OK).json({

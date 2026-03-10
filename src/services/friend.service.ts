@@ -10,13 +10,16 @@ import { alias } from "drizzle-orm/pg-core";
 /**
  *	Retrieves the internal ids of all friends of the user
  */
-export async function getAllFriendIdsOfUser(userId: string) {
-	// Get all rows containing the user on either column
-	const friendships = await db!
+export async function getAllFriendsOfUser(userId: string) {
+	const friendTable = alias(usersTable, "friend");
+
+	return db!
 		.select({
-			user_id: friendsTable.user_id,
-			friend_id: friendsTable.friend_id,
-			internal_id: usersTable.internal_id,
+			internal_id: friendTable.internal_id,
+			id: friendTable.id,
+			full_name: friendTable.full_name,
+			email: friendTable.email,
+			avatar_url: friendTable.avatar_url,
 		})
 		.from(usersTable)
 		.innerJoin(
@@ -26,27 +29,20 @@ export async function getAllFriendIdsOfUser(userId: string) {
 				eq(friendsTable.friend_id, usersTable.internal_id),
 			),
 		)
-		.where(eq(usersTable.id, userId));
-
-	// Return an array of internalIds of the friends of the user
-	return friendships.map((f) =>
-		f.user_id === f.internal_id ? f.friend_id : f.user_id,
-	);
-}
-
-export async function getAFriendRequest(senderId: number, receiverId: number) {
-	const [request] = await db!
-		.select()
-		.from(friendRequestsTable)
-		.where(
-			and(
-				eq(friendRequestsTable.sender_id, senderId),
-				eq(friendRequestsTable.receiver_id, receiverId),
+		.innerJoin(
+			friendTable,
+			or(
+				and(
+					eq(friendsTable.user_id, usersTable.internal_id),
+					eq(friendTable.internal_id, friendsTable.friend_id),
+				),
+				and(
+					eq(friendsTable.friend_id, usersTable.internal_id),
+					eq(friendTable.internal_id, friendsTable.user_id),
+				),
 			),
 		)
-		.limit(1);
-
-	return request;
+		.where(eq(usersTable.id, userId));
 }
 
 /**
@@ -56,7 +52,12 @@ export async function sendFriendRequestToUser(
 	fromId: string,
 	toIdentifier: string,
 ) {
+	// Check if the identified is an email or ID
 	const isEmail = toIdentifier.includes("@");
+
+	// Quick check to see if the user is sending a request to themselves
+	if (!isEmail && fromId === toIdentifier)
+		throw new APIError(STATUS_CODES.BAD_REQUEST, "You are sending a request to yourself");
 
 	// Get the internal IDs of the user and the receiver
 	const users = await db!
@@ -85,19 +86,60 @@ export async function sendFriendRequestToUser(
 	// If in case receiver doesn't exist then throw error
 	if (!to) throw new APIError(STATUS_CODES.NOT_FOUND, "User not found");
 
+	// Check if user is sending a request to themself
+	// extra check in case the identifier provided is an email
 	if (to.internal_id === from!.internal_id)
 		throw new APIError(
 			STATUS_CODES.BAD_REQUEST,
 			"You cannot send a request to yourself",
 		);
 
-	const request = await getAFriendRequest(from!.internal_id, to.internal_id);
+	// Check if there is already a request in the db
+	// Checking both ways to ensure neither have sent a request
+	// to each other
+	const [existingRequest] = await db!
+		.select()
+		.from(friendRequestsTable)
+		.where(
+			or(
+				and(
+					eq(friendRequestsTable.sender_id, from!.internal_id),
+					eq(friendRequestsTable.receiver_id, to.internal_id),
+				),
+				and(
+					eq(friendRequestsTable.sender_id, to.internal_id),
+					eq(friendRequestsTable.receiver_id, from!.internal_id),
+				),
+			),
+		)
+		.limit(1);
 
-	if (request)
+	if (existingRequest)
 		throw new APIError(
 			STATUS_CODES.BAD_REQUEST,
-			"Friend request already sent",
+			"Friend request already exists",
 		);
+
+	// Checking if the users are friends already
+	const [existingFriendship] = await db!
+		.select()
+		.from(friendsTable)
+		.where(
+			or(
+				and(
+					eq(friendsTable.user_id, from!.internal_id),
+					eq(friendsTable.friend_id, to.internal_id),
+				),
+				and(
+					eq(friendsTable.user_id, to.internal_id),
+					eq(friendsTable.friend_id, from!.internal_id),
+				),
+			),
+		)
+		.limit(1);
+
+	if (existingFriendship)
+		throw new APIError(STATUS_CODES.BAD_REQUEST, "You are already friends");
 
 	// Create a request
 	await db!.insert(friendRequestsTable).values({
@@ -106,7 +148,10 @@ export async function sendFriendRequestToUser(
 	});
 }
 
-export function getAllFriendRequestsSentByUser(userId: string) {
+/**
+ *	Gets all friends requests sent by the user
+ */
+export async function getAllFriendRequestsSentByUser(userId: string) {
 	const receiverTable = alias(usersTable, "receiver");
 
 	return db!
@@ -131,7 +176,10 @@ export function getAllFriendRequestsSentByUser(userId: string) {
 		.where(eq(usersTable.id, userId));
 }
 
-export function getAllFriendRequestsReceivedByUser(userId: string) {
+/**
+ *	Gets all friend requests received by the user
+ */
+export async function getAllFriendRequestsReceivedByUser(userId: string) {
 	const senderTable = alias(usersTable, "sender");
 
 	return db!
@@ -156,12 +204,29 @@ export function getAllFriendRequestsReceivedByUser(userId: string) {
 		.where(eq(usersTable.id, userId));
 }
 
+/**
+ * Performs the necessary on any action taken on a request
+ */
 export async function validateFriendRequestAction(
 	senderId: number,
 	receiverId: number,
 	userId: string,
 	accept: boolean,
 ) {
+	const [request] = await db!
+		.select()
+		.from(friendRequestsTable)
+		.where(
+			and(
+				eq(friendRequestsTable.sender_id, senderId),
+				eq(friendRequestsTable.receiver_id, receiverId),
+			),
+		)
+		.limit(1);
+
+	if (!request)
+		throw new APIError(STATUS_CODES.NOT_FOUND, "Friend request not found");
+
 	const [user] = await db!
 		.select({ internal_id: usersTable.internal_id })
 		.from(usersTable)
@@ -182,18 +247,16 @@ export async function validateFriendRequestAction(
 			"You are neither the receiver nor the sender of this request",
 		);
 
-	if (accept && user!.internal_id !== receiverId)
+	if (accept && user.internal_id !== receiverId)
 		throw new APIError(
 			STATUS_CODES.UNAUTHORIZED,
 			"You are not allowed to accept this request",
 		);
-
-	const request = await getAFriendRequest(senderId, receiverId);
-
-	if (!request)
-		throw new APIError(STATUS_CODES.NOT_FOUND, "Friend request not found");
 }
 
+/**
+ *	Accepts a friend request
+ */
 export async function acceptFriendRequest(
 	senderId: number,
 	receiverId: number,
@@ -206,6 +269,9 @@ export async function acceptFriendRequest(
 	});
 }
 
+/**
+ *	Rejects a friend request
+ */
 export async function removeFriendRequest(
 	senderId: number,
 	receiverId: number,
