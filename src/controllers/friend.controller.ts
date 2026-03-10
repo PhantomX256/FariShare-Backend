@@ -64,30 +64,39 @@ export async function getSentFriendRequest(req: Request, res: Response) {
 }
 
 export async function getReceivedFriendRequest(req: Request, res: Response) {
-	const sentFriendRequests = await getAllFriendRequestsReceivedByUser(
+	const receivedFriendRequests = await getAllFriendRequestsReceivedByUser(
 		req.user!.id,
 	);
 
 	return res.status(STATUS_CODES.OK).json({
 		status: RESPONSE_STATUS.SUCCESS,
 		message: "Retrieved all sent requests",
-		sentFriendRequests,
+		receivedFriendRequests,
 	});
 }
 
-export async function modifyFriendRequest(req: Request, res: Response) {
-	const { senderId, receiverId, accept } = req.body;
+export async function modifyFriendRequest(req: Request, res: Response, next: NextFunction) {
+	try {
+		const { senderId, receiverId, accept } = req.body;
 
-	await validateFriendRequestAction(senderId, receiverId, req.user!.id);
+		await validateFriendRequestAction(
+			senderId,
+			receiverId,
+			req.user!.id,
+			accept,
+		);
 
-	if (accept) {
-		await acceptFriendRequest(senderId, receiverId);
-	} else {
-		await removeFriendRequest(senderId, receiverId);
+		if (accept) {
+			await acceptFriendRequest(senderId, receiverId);
+		} else {
+			await removeFriendRequest(senderId, receiverId);
+		}
+
+		return res.status(STATUS_CODES.OK).json({
+			status: RESPONSE_STATUS.SUCCESS,
+			message: `Successfully ${accept ? "accepted" : "removed"} the request`,
+		});
+	} catch (err) {
+		next(err);
 	}
-
-	return res.status(STATUS_CODES.OK).json({
-		status: RESPONSE_STATUS.SUCCESS,
-		message: `Successfully ${accept ? "accepted" : "removed"} the request`,
-	});
 }

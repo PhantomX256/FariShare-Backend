@@ -5,6 +5,7 @@ import { friendsTable } from "../database/schemas/friends.ts";
 import { friendRequestsTable } from "../database/schemas/friendRequests.ts";
 import { APIError } from "../errors/api.error.ts";
 import { STATUS_CODES } from "../lib/constants.ts";
+import { alias } from "drizzle-orm/pg-core";
 
 /**
  *	Retrieves the internal ids of all friends of the user
@@ -51,7 +52,10 @@ export async function getAFriendRequest(senderId: number, receiverId: number) {
 /**
  *	Send friend request to a user
  */
-export async function sendFriendRequestToUser(fromId: string, toIdentifier: string) {
+export async function sendFriendRequestToUser(
+	fromId: string,
+	toIdentifier: string,
+) {
 	const isEmail = toIdentifier.includes("@");
 
 	// Get the internal IDs of the user and the receiver
@@ -81,11 +85,19 @@ export async function sendFriendRequestToUser(fromId: string, toIdentifier: stri
 	// If in case receiver doesn't exist then throw error
 	if (!to) throw new APIError(STATUS_CODES.NOT_FOUND, "User not found");
 
-	if (to.internal_id === from!.internal_id) throw new APIError(STATUS_CODES.BAD_REQUEST, "You cannot send a request to yourself");
+	if (to.internal_id === from!.internal_id)
+		throw new APIError(
+			STATUS_CODES.BAD_REQUEST,
+			"You cannot send a request to yourself",
+		);
 
 	const request = await getAFriendRequest(from!.internal_id, to.internal_id);
 
-	if (request) throw new APIError(STATUS_CODES.BAD_REQUEST, "Friend request already sent");
+	if (request)
+		throw new APIError(
+			STATUS_CODES.BAD_REQUEST,
+			"Friend request already sent",
+		);
 
 	// Create a request
 	await db!.insert(friendRequestsTable).values({
@@ -95,31 +107,51 @@ export async function sendFriendRequestToUser(fromId: string, toIdentifier: stri
 }
 
 export function getAllFriendRequestsSentByUser(userId: string) {
+	const receiverTable = alias(usersTable, "receiver");
+
 	return db!
 		.select({
-			sender_id: friendRequestsTable.sender_id,
-			receiver_id: friendRequestsTable.receiver_id,
+			sender: friendRequestsTable.sender_id,
 			created_at: friendRequestsTable.created_at,
+			receiver: {
+				internal_id: receiverTable.internal_id,
+				full_name: receiverTable.full_name,
+				avatar_url: receiverTable.avatar_url,
+			},
 		})
 		.from(friendRequestsTable)
 		.innerJoin(
 			usersTable,
 			eq(usersTable.internal_id, friendRequestsTable.sender_id),
 		)
+		.innerJoin(
+			receiverTable,
+			eq(receiverTable.internal_id, friendRequestsTable.receiver_id),
+		)
 		.where(eq(usersTable.id, userId));
 }
 
 export function getAllFriendRequestsReceivedByUser(userId: string) {
+	const senderTable = alias(usersTable, "sender");
+
 	return db!
 		.select({
-			sender_id: friendRequestsTable.sender_id,
 			receiver_id: friendRequestsTable.receiver_id,
 			created_at: friendRequestsTable.created_at,
+			sender: {
+				internal_id: senderTable.internal_id,
+				full_name: senderTable.full_name,
+				avatar_url: senderTable.avatar_url,
+			},
 		})
 		.from(friendRequestsTable)
 		.innerJoin(
 			usersTable,
 			eq(usersTable.internal_id, friendRequestsTable.receiver_id),
+		)
+		.innerJoin(
+			senderTable,
+			eq(senderTable.internal_id, friendRequestsTable.sender_id),
 		)
 		.where(eq(usersTable.id, userId));
 }
@@ -128,6 +160,7 @@ export async function validateFriendRequestAction(
 	senderId: number,
 	receiverId: number,
 	userId: string,
+	accept: boolean,
 ) {
 	const [user] = await db!
 		.select({ internal_id: usersTable.internal_id })
@@ -147,6 +180,12 @@ export async function validateFriendRequestAction(
 		throw new APIError(
 			STATUS_CODES.UNAUTHORIZED,
 			"You are neither the receiver nor the sender of this request",
+		);
+
+	if (accept && user!.internal_id !== receiverId)
+		throw new APIError(
+			STATUS_CODES.UNAUTHORIZED,
+			"You are not allowed to accept this request",
 		);
 
 	const request = await getAFriendRequest(senderId, receiverId);

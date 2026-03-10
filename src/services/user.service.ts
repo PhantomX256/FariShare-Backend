@@ -24,3 +24,10 @@ export function getUserDataByInternalIds(internalUserIds: number[]) {
 		.from(usersTable)
 		.where(inArray(usersTable.internal_id, internalUserIds));
 }
+
+export function getUserDataByInternalId(internalUserId: number) {
+	return db!
+		.select()
+		.from(usersTable)
+		.where(eq(usersTable.internal_id, internalUserId));
+}
