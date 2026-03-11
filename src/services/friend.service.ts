@@ -1,5 +1,5 @@
 import db from "../database/client.ts";
-import { and, eq, or } from "drizzle-orm";
+import { and, asc, eq, or } from "drizzle-orm";
 import { usersTable } from "../database/schemas/users.ts";
 import { friendsTable } from "../database/schemas/friends.ts";
 import { friendRequestsTable } from "../database/schemas/friendRequests.ts";
@@ -20,6 +20,7 @@ export async function getAllFriendsOfUser(userId: string) {
 			full_name: friendTable.full_name,
 			email: friendTable.email,
 			avatar_url: friendTable.avatar_url,
+			created_at: friendsTable.created_at
 		})
 		.from(usersTable)
 		.innerJoin(
@@ -42,6 +43,7 @@ export async function getAllFriendsOfUser(userId: string) {
 				),
 			),
 		)
+		.orderBy(asc(friendTable.full_name))
 		.where(eq(usersTable.id, userId));
 }
 
@@ -156,12 +158,15 @@ export async function getAllFriendRequestsSentByUser(userId: string) {
 
 	return db!
 		.select({
-			sender: friendRequestsTable.sender_id,
+			sender_id: friendRequestsTable.sender_id,
 			created_at: friendRequestsTable.created_at,
 			receiver: {
+				id: receiverTable.id,
 				internal_id: receiverTable.internal_id,
 				full_name: receiverTable.full_name,
+				email: receiverTable.email,
 				avatar_url: receiverTable.avatar_url,
+				created_at: receiverTable.created_at
 			},
 		})
 		.from(friendRequestsTable)
@@ -187,9 +192,12 @@ export async function getAllFriendRequestsReceivedByUser(userId: string) {
 			receiver_id: friendRequestsTable.receiver_id,
 			created_at: friendRequestsTable.created_at,
 			sender: {
+				id: senderTable.id,
 				internal_id: senderTable.internal_id,
 				full_name: senderTable.full_name,
+				email: senderTable.email,
 				avatar_url: senderTable.avatar_url,
+				created_at: senderTable.created_at,
 			},
 		})
 		.from(friendRequestsTable)
