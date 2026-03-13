@@ -8,8 +8,8 @@ import { getUserDataById } from "../services/user.service.ts";
  */
 export async function getUserDataFromIdController(req: Request, res: Response) {
 	// Get user data from userId extracted from jwt
-	const userData = await getUserDataById(req.user!.id);
-	logger.debug("User data fetched for User: " + req.user!.id);
+	const userData = await getUserDataById(req.user!.internal_id);
+	logger.debug("User data fetched for User: " + req.user!.internal_id);
 
 	return res.status(STATUS_CODES.OK).json({
 		status: RESPONSE_STATUS.SUCCESS,

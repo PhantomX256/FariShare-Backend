@@ -25,6 +25,10 @@ export function verifyToken(
 		const decoded = jwt.verify(token, JWT_SECRET) as { internal_id: number, id: string };
 		logger.debug("Token decoded successfully");
 
+		// Invalid token
+		if (!decoded.id || !decoded.internal_id)
+			throw new Error();
+
 		// Embed the user into the request
 		req.user = {
 			id: decoded.id,
