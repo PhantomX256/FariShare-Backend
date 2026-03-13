@@ -22,12 +22,13 @@ export function verifyToken(
 
 	try {
 		// Verify the jwt
-		const decoded = jwt.verify(token, JWT_SECRET) as { id: string };
+		const decoded = jwt.verify(token, JWT_SECRET) as { internal_id: number, id: string };
 		logger.debug("Token decoded successfully");
 
 		// Embed the user into the request
 		req.user = {
 			id: decoded.id,
+			internal_id: decoded.internal_id,
 		};
 
 		next();

@@ -10,7 +10,7 @@ import { alias } from "drizzle-orm/pg-core";
 /**
  *	Retrieves the internal ids of all friends of the user
  */
-export async function getAllFriendsOfUser(userId: string) {
+export async function getAllFriendsOfUser(userInternalId: number) {
 	const friendTable = alias(usersTable, "friend");
 
 	return db!
@@ -20,7 +20,7 @@ export async function getAllFriendsOfUser(userId: string) {
 			full_name: friendTable.full_name,
 			email: friendTable.email,
 			avatar_url: friendTable.avatar_url,
-			created_at: friendsTable.created_at
+			created_at: friendsTable.created_at,
 		})
 		.from(usersTable)
 		.innerJoin(
@@ -44,25 +44,21 @@ export async function getAllFriendsOfUser(userId: string) {
 			),
 		)
 		.orderBy(asc(friendTable.full_name))
-		.where(eq(usersTable.id, userId));
+		.where(eq(usersTable.internal_id, userInternalId));
 }
 
 /**
  *	Send friend request to a user
  */
 export async function sendFriendRequestToUser(
-	fromId: string,
+	fromInternalId: number,
 	toIdentifier: string,
 ) {
-	// Check if the identified is an email or ID
+	// Check if the identifier is an email or ID
 	const isEmail = toIdentifier.includes("@");
 
-	// Quick check to see if the user is sending a request to themselves
-	if (!isEmail && fromId === toIdentifier)
-		throw new APIError(STATUS_CODES.BAD_REQUEST, "You are sending a request to yourself");
-
-	// Get the internal IDs of the user and the receiver
-	const users = await db!
+	// Find target user by email or UUID id
+	const [to] = await db!
 		.select({
 			id: usersTable.id,
 			email: usersTable.email,
@@ -70,47 +66,35 @@ export async function sendFriendRequestToUser(
 		})
 		.from(usersTable)
 		.where(
-			or(
-				eq(usersTable.id, fromId),
-				isEmail
-					? eq(usersTable.email, toIdentifier)
-					: eq(usersTable.id, toIdentifier),
-			),
+			isEmail
+				? eq(usersTable.email, toIdentifier)
+				: eq(usersTable.id, toIdentifier),
 		)
-		.limit(2);
+		.limit(1);
 
-	// Get the row containing sender and receiver
-	const from = users.find((u) => u.id === fromId);
-	const to = isEmail
-		? users.find((u) => u.email === toIdentifier)
-		: users.find((u) => u.id === toIdentifier);
-
-	// If in case receiver doesn't exist then throw error
+	// If receiver doesn't exist then throw error
 	if (!to) throw new APIError(STATUS_CODES.NOT_FOUND, "User not found");
 
-	// Check if user is sending a request to themself
-	// extra check in case the identifier provided is an email
-	if (to.internal_id === from!.internal_id)
+	// Prevent sending request to yourself
+	if (to.internal_id === fromInternalId)
 		throw new APIError(
 			STATUS_CODES.BAD_REQUEST,
 			"You cannot send a request to yourself",
 		);
 
-	// Check if there is already a request in the db
-	// Checking both ways to ensure neither have sent a request
-	// to each other
+	// Check if there is already a request in either direction
 	const [existingRequest] = await db!
 		.select()
 		.from(friendRequestsTable)
 		.where(
 			or(
 				and(
-					eq(friendRequestsTable.sender_id, from!.internal_id),
+					eq(friendRequestsTable.sender_id, fromInternalId),
 					eq(friendRequestsTable.receiver_id, to.internal_id),
 				),
 				and(
 					eq(friendRequestsTable.sender_id, to.internal_id),
-					eq(friendRequestsTable.receiver_id, from!.internal_id),
+					eq(friendRequestsTable.receiver_id, fromInternalId),
 				),
 			),
 		)
@@ -122,19 +106,19 @@ export async function sendFriendRequestToUser(
 			"Friend request already exists",
 		);
 
-	// Checking if the users are friends already
+	// Check if users are already friends
 	const [existingFriendship] = await db!
 		.select()
 		.from(friendsTable)
 		.where(
 			or(
 				and(
-					eq(friendsTable.user_id, from!.internal_id),
+					eq(friendsTable.user_id, fromInternalId),
 					eq(friendsTable.friend_id, to.internal_id),
 				),
 				and(
 					eq(friendsTable.user_id, to.internal_id),
-					eq(friendsTable.friend_id, from!.internal_id),
+					eq(friendsTable.friend_id, fromInternalId),
 				),
 			),
 		)
@@ -143,9 +127,9 @@ export async function sendFriendRequestToUser(
 	if (existingFriendship)
 		throw new APIError(STATUS_CODES.BAD_REQUEST, "You are already friends");
 
-	// Create a request
+	// Create request
 	await db!.insert(friendRequestsTable).values({
-		sender_id: from!.internal_id,
+		sender_id: fromInternalId,
 		receiver_id: to.internal_id,
 	});
 }
@@ -153,7 +137,7 @@ export async function sendFriendRequestToUser(
 /**
  *	Gets all friends requests sent by the user
  */
-export async function getAllFriendRequestsSentByUser(userId: string) {
+export async function getAllFriendRequestsSentByUser(userInternalId: number) {
 	const receiverTable = alias(usersTable, "receiver");
 
 	return db!
@@ -166,25 +150,23 @@ export async function getAllFriendRequestsSentByUser(userId: string) {
 				full_name: receiverTable.full_name,
 				email: receiverTable.email,
 				avatar_url: receiverTable.avatar_url,
-				created_at: receiverTable.created_at
+				created_at: receiverTable.created_at,
 			},
 		})
 		.from(friendRequestsTable)
 		.innerJoin(
-			usersTable,
-			eq(usersTable.internal_id, friendRequestsTable.sender_id),
-		)
-		.innerJoin(
 			receiverTable,
 			eq(receiverTable.internal_id, friendRequestsTable.receiver_id),
 		)
-		.where(eq(usersTable.id, userId));
+		.where(eq(friendRequestsTable.sender_id, userInternalId));
 }
 
 /**
  *	Gets all friend requests received by the user
  */
-export async function getAllFriendRequestsReceivedByUser(userId: string) {
+export async function getAllFriendRequestsReceivedByUser(
+	userInternalId: number,
+) {
 	const senderTable = alias(usersTable, "sender");
 
 	return db!
@@ -202,14 +184,10 @@ export async function getAllFriendRequestsReceivedByUser(userId: string) {
 		})
 		.from(friendRequestsTable)
 		.innerJoin(
-			usersTable,
-			eq(usersTable.internal_id, friendRequestsTable.receiver_id),
-		)
-		.innerJoin(
 			senderTable,
 			eq(senderTable.internal_id, friendRequestsTable.sender_id),
 		)
-		.where(eq(usersTable.id, userId));
+		.where(eq(friendRequestsTable.receiver_id, userInternalId));
 }
 
 /**

@@ -15,7 +15,7 @@ export async function getUserDataOfFriendsOfCurrentUser(
 	req: Request,
 	res: Response,
 ) {
-	const friendData = await getAllFriendsOfUser(req.user!.id);
+	const friendData = await getAllFriendsOfUser(req.user!.internal_id);
 	logger.debug("Successfully retrieved the data of all friends");
 
 	return res.status(STATUS_CODES.OK).json({
@@ -33,7 +33,7 @@ export async function sendFriendRequest(
 	try {
 		const { friend } = req.body;
 
-		await sendFriendRequestToUser(req.user!.id, friend);
+		await sendFriendRequestToUser(req.user!.internal_id, friend);
 		logger.debug(
 			`Successfully sent a request by: ${req.user!.id} to ${friend}`,
 		);
@@ -49,7 +49,7 @@ export async function sendFriendRequest(
 
 export async function getSentFriendRequest(req: Request, res: Response) {
 	const sentFriendRequests = await getAllFriendRequestsSentByUser(
-		req.user!.id,
+		req.user!.internal_id,
 	);
 	logger.debug("Retrieved all requests sent by user: " + req.user!.id);
 
@@ -62,7 +62,7 @@ export async function getSentFriendRequest(req: Request, res: Response) {
 
 export async function getReceivedFriendRequest(req: Request, res: Response) {
 	const receivedFriendRequests = await getAllFriendRequestsReceivedByUser(
-		req.user!.id,
+		req.user!.internal_id,
 	);
 	logger.debug("Retrieved all requests received by user: " + req.user!.id);
 

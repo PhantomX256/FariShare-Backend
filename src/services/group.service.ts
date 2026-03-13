@@ -1,10 +1,9 @@
 import db from "../database/client.ts";
 import { groupsTable } from "../database/schemas/groups.ts";
-import { usersTable } from "../database/schemas/users.ts";
 import { eq } from "drizzle-orm";
 import { groupMembersTable } from "../database/schemas/groupMembers.ts";
 
-export async function getAllGroupsOfUser(userId: string) {
+export async function getAllGroupsOfUser(userInternalId: number) {
 	return db!
 		.select({
 			id: groupsTable.id,
@@ -15,13 +14,9 @@ export async function getAllGroupsOfUser(userId: string) {
 		})
 		.from(groupMembersTable)
 		.innerJoin(
-			usersTable,
-			eq(usersTable.internal_id, groupMembersTable.user_id),
-		)
-		.innerJoin(
 			groupsTable,
 			eq(groupsTable.internal_id, groupMembersTable.group_id),
 		)
-		.where(eq(usersTable.id, userId));
+		.where(eq(groupMembersTable.user_id, userInternalId));
 }
 

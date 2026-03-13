@@ -46,7 +46,7 @@ export async function getJWTFromTokenAndInsertIntoDb(credential: string) {
 
 	// Sign a JWT with the user's id
 	const token = jwt.sign(
-		{ id: user!.id },
+		{ id: user!.internal_id },
 		JWT_SECRET,
 		{ expiresIn: "7d" }, // expires in 7 days
 	);
