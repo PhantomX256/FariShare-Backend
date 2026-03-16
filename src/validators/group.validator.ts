@@ -1,4 +1,4 @@
-import { number, string, z } from "zod";
+import { string, z } from "zod";
 
 const ALLOWED_ICONS = [
 	"home",
@@ -26,5 +26,11 @@ export const CreateGroupSchema = z.object({
 				),
 			guests: z.array(string().min(1)),
 		}),
+	}),
+});
+
+export const GetGroupDataSchema = z.object({
+	params: z.object({
+		groupId: z.uuid("Invalid groupId"),
 	}),
 });

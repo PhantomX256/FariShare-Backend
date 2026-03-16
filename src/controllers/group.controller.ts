@@ -1,5 +1,5 @@
 import type { NextFunction, Request, Response } from "express";
-import { createAGroup, getAllGroupsOfUser } from "../services/group.service.ts";
+import { createAGroup, getAllGroupsOfUser, getGroupDataByGroupId } from "../services/group.service.ts";
 import { RESPONSE_STATUS, STATUS_CODES } from "../lib/constants.ts";
 import logger from "../lib/utils/logger.ts";
 
@@ -39,4 +39,21 @@ export async function createGroup(
 		status: RESPONSE_STATUS.SUCCESS,
 		message: "Group created successfully",
 	});
+}
+
+export async function getGroupData(req: Request, res: Response, next: NextFunction) {
+	const groupId = req.params.groupId as string;
+
+	try {
+		const { members } = await getGroupDataByGroupId(groupId!);
+		logger.debug("Successfully retrieved data for group: " + groupId);
+
+		return res.status(STATUS_CODES.OK).json({
+			status: RESPONSE_STATUS.SUCCESS,
+			message: "Retrieved group data",
+			members
+		})
+	} catch (err) {
+		next(err);
+	}
 }
