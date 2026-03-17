@@ -45,12 +45,13 @@ export async function getGroupData(req: Request, res: Response, next: NextFuncti
 	const groupId = req.params.groupId as string;
 
 	try {
-		const { members } = await getGroupDataByGroupId(groupId!);
+		const { group, members } = await getGroupDataByGroupId(groupId!);
 		logger.debug("Successfully retrieved data for group: " + groupId);
 
 		return res.status(STATUS_CODES.OK).json({
 			status: RESPONSE_STATUS.SUCCESS,
 			message: "Retrieved group data",
+			group,
 			members
 		})
 	} catch (err) {

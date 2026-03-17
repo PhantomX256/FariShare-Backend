@@ -95,9 +95,7 @@ export async function createAGroup(
 
 export async function getGroupDataByGroupId(groupId: string) {
 	const [group] = await db!
-		.select({
-			internal_id: groupsTable.internal_id,
-		})
+		.select()
 		.from(groupsTable)
 		.where(eq(groupsTable.id, groupId))
 		.limit(1);
@@ -121,6 +119,7 @@ export async function getGroupDataByGroupId(groupId: string) {
 		.where(eq(groupMembersTable.group_id, group.internal_id));
 
 	return {
+		group,
 		members
 	}
 }
