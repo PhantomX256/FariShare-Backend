@@ -1,9 +1,9 @@
 import { Router } from "express";
 import {
-	getReceivedFriendRequest,
-	getSentFriendRequest,
-	getUserDataOfFriendsOfCurrentUser,
-	modifyFriendRequest,
+	getReceivedRequests,
+	getSentRequests,
+	getFriends,
+	respondToRequest,
 	sendFriendRequest,
 } from "../controllers/friend.controller.ts";
 import { validateMiddleware } from "../middlewares/validate.middleware.ts";
@@ -14,13 +14,13 @@ import {
 
 const router = Router();
 
-router.get("/", getUserDataOfFriendsOfCurrentUser);
-router.get("/request/sent", getSentFriendRequest);
-router.get("/request/received", getReceivedFriendRequest);
+router.get("/", getFriends);
+router.get("/request/sent", getSentRequests);
+router.get("/request/received", getReceivedRequests);
 router.put(
 	"/request",
 	validateMiddleware(ModifyFriendRequestSchema),
-	modifyFriendRequest,
+	respondToRequest,
 );
 router.post(
 	"/request",

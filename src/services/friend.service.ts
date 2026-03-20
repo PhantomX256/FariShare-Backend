@@ -51,7 +51,7 @@ export async function getAllFriendsOfUser(userInternalId: number) {
 /**
  *	Send friend request to a user
  */
-export async function sendFriendRequestToUser(
+export async function sendRequest(
 	fromInternalId: number,
 	toIdentifier: string,
 ) {
@@ -62,7 +62,7 @@ export async function sendFriendRequestToUser(
 		);
 
 		// Create request
-		await createAFriendRequest(fromInternalId, toInternalId);
+		await createRequest(fromInternalId, toInternalId);
 	} catch (err) {
 		// We throw the error to the controller to handle return
 		throw err;
@@ -163,7 +163,7 @@ async function getFriendshipByIds(firstId: number, secondId: number) {
 	return friendship;
 }
 
-async function createAFriendRequest(senderId: number, receiverId: number) {
+async function createRequest(senderId: number, receiverId: number) {
 	await db!.insert(friendRequestsTable).values({
 		sender_id: senderId,
 		receiver_id: receiverId,
@@ -173,7 +173,7 @@ async function createAFriendRequest(senderId: number, receiverId: number) {
 /**
  *	Gets all friends requests sent by the user
  */
-export async function getAllFriendRequestsSentByUser(userInternalId: number) {
+export async function getAllSentRequests(userInternalId: number) {
 	const receiverTable = alias(usersTable, "receiver");
 
 	return db!
@@ -200,7 +200,7 @@ export async function getAllFriendRequestsSentByUser(userInternalId: number) {
 /**
  *	Gets all friend requests received by the user
  */
-export async function getAllFriendRequestsReceivedByUser(
+export async function getAllReceivedRequests(
 	userInternalId: number,
 ) {
 	const senderTable = alias(usersTable, "sender");
@@ -226,10 +226,34 @@ export async function getAllFriendRequestsReceivedByUser(
 		.where(eq(friendRequestsTable.receiver_id, userInternalId));
 }
 
+export async function handleRequestAction(
+	senderId: number,
+	receiverId: number,
+	userInternalId: number,
+	accept: boolean,
+) {
+	try {
+		await validateFriendRequestAction(
+			senderId,
+			receiverId,
+			userInternalId,
+			accept,
+		);
+
+		if (accept) {
+			await acceptFriendRequest(senderId, receiverId);
+		} else {
+			await removeFriendRequest(senderId, receiverId);
+		}
+	} catch (err) {
+		throw err;
+	}
+}
+
 /**
  * Performs the necessary on any action taken on a request
  */
-export async function validateFriendRequestAction(
+async function validateFriendRequestAction(
 	senderId: number,
 	receiverId: number,
 	userInternalId: number,
@@ -260,7 +284,7 @@ export async function validateFriendRequestAction(
 /**
  *	Accepts a friend request
  */
-export async function acceptFriendRequest(
+async function acceptFriendRequest(
 	senderId: number,
 	receiverId: number,
 ) {
@@ -281,7 +305,7 @@ async function createFriendship(
 /**
  *	Rejects a friend request
  */
-export async function removeFriendRequest(
+async function removeFriendRequest(
 	senderId: number,
 	receiverId: number,
 ) {
