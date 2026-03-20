@@ -104,7 +104,8 @@ export async function getGroupDataByGroupId(groupId: string) {
 
 	const members = await db!
 		.select({
-			id: usersTable.id,
+			member_id: groupMembersTable.id,
+			user_id: usersTable.id,
 			internal_id: usersTable.internal_id,
 			// Use user's full_name if available, otherwise fallback to the guest name in group_members
 			name: sql<string>`coalesce(${usersTable.full_name}, ${groupMembersTable.name})`,
