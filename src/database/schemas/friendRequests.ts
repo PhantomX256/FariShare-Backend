@@ -10,7 +10,7 @@ export const friendRequestsTable = pgTable(
 		receiver_id: integer("receiver_id")
 			.notNull()
 			.references(() => usersTable.internal_id),
-		created_at: timestamp("created_at").defaultNow(),
+		created_at: timestamp("created_at").defaultNow().notNull(),
 	},
 	(table) => [primaryKey({ columns: [table.sender_id, table.receiver_id] })],
 );

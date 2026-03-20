@@ -84,7 +84,7 @@ export async function modifyFriendRequest(
 		await validateFriendRequestAction(
 			senderId,
 			receiverId,
-			req.user!.id,
+			req.user!.internal_id,
 			accept,
 		);
 		logger.debug(

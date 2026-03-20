@@ -17,5 +17,5 @@ export const groupsTable = pgTable("groups", {
 	created_by: integer("created_by")
 		.notNull()
 		.references(() => usersTable.internal_id),
-	created_at: timestamp("created_at").defaultNow(),
+	created_at: timestamp("created_at").defaultNow().notNull(),
 });

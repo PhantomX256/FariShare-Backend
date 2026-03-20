@@ -1,6 +1,6 @@
 import { GOOGLE_CLIENT_ID, JWT_SECRET } from "../lib/constants.ts";
 import logger from "../lib/utils/logger.ts";
-import { OAuth2Client } from "google-auth-library";
+import { OAuth2Client, TokenPayload } from "google-auth-library";
 import { usersTable } from "../database/schemas/users.ts";
 import db from "../database/client.ts";
 import jwt from "jsonwebtoken";
@@ -26,7 +26,21 @@ export async function getJWTFromTokenAndInsertIntoDb(credential: string) {
 	logger.debug("User details retrieved from Google");
 
 	// Insert the relevant data into the database
-	// and get back the id of the user
+	// and get back the user data
+	const user = await insertUserDetailsIntoDb(payload!);
+	logger.debug(`User data inserted into database. UserID: ${user!.id}`);
+
+	// Sign a JWT with the user's id
+	const token = jwt.sign(
+		{ internal_id: user!.internal_id, id: user!.id },
+		JWT_SECRET,
+		{ expiresIn: "7d" }, // expires in 7 days
+	);
+
+	return { token, user };
+}
+
+async function insertUserDetailsIntoDb(payload: TokenPayload) {
 	const [user] = await db!
 		.insert(usersTable)
 		.values({
@@ -42,14 +56,5 @@ export async function getJWTFromTokenAndInsertIntoDb(credential: string) {
 			},
 		})
 		.returning();
-	logger.debug(`User data inserted into database. UserID: ${user!.id}`);
-
-	// Sign a JWT with the user's id
-	const token = jwt.sign(
-		{ internal_id: user!.internal_id, id: user!.id },
-		JWT_SECRET,
-		{ expiresIn: "7d" }, // expires in 7 days
-	);
-
-	return { token, user };
+	return user;
 }

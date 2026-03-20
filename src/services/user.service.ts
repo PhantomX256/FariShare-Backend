@@ -13,3 +13,23 @@ export async function getUserDataById(userInternalId: number) {
 		.limit(1);
 	return user;
 }
+
+export async function getUserDataByEmailOrId(emailOrId: string) {
+	const isEmail = emailOrId.includes("@");
+
+	const [user] = await db!
+		.select({
+			id: usersTable.id,
+			email: usersTable.email,
+			internal_id: usersTable.internal_id,
+		})
+		.from(usersTable)
+		.where(
+			isEmail
+				? eq(usersTable.email, emailOrId)
+				: eq(usersTable.id, emailOrId),
+		)
+		.limit(1);
+
+	return user;
+}

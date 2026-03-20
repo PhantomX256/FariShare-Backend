@@ -10,5 +10,5 @@ export const groupMembersTable = pgTable("group_members", {
 	user_id: integer("user_id").references(() => usersTable.internal_id),
 	name: text("name"),
 	is_admin: boolean("is_admin").notNull().default(false),
-	joined_at: timestamp("joined_at").defaultNow(),
+	joined_at: timestamp("joined_at").defaultNow().notNull(),
 });

@@ -50,7 +50,29 @@ export async function createAGroup(
 	color: string,
 	users: number[],
 	guests: string[],
-	currentUserId: number,
+	currentUserInternalId: number,
+) {
+	try {
+		validateCreateGroupData(users, guests, currentUserInternalId);
+	} catch (err) {
+		// Throw error to controller to handle
+		throw err;
+	}
+
+	await createGroupWithData(
+		name,
+		icon,
+		color,
+		users,
+		guests,
+		currentUserInternalId,
+	);
+}
+
+function validateCreateGroupData(
+	users: number[],
+	guests: string[],
+	currentUserInternalId: number,
 ) {
 	if (users.length === 1 && guests.length === 0)
 		throw new APIError(
@@ -58,27 +80,36 @@ export async function createAGroup(
 			"Must have at least one other member other than yourself",
 		);
 
-	if (!users.includes(currentUserId))
+	if (!users.includes(currentUserInternalId))
 		throw new APIError(
 			STATUS_CODES.BAD_REQUEST,
 			"You are not included in the members",
 		);
+}
 
-	return db!.transaction(async (tx) => {
+async function createGroupWithData(
+	name: string,
+	icon: string,
+	color: string,
+	users: number[],
+	guests: string[],
+	currentUserInternalId: number,
+) {
+	await db!.transaction(async (tx) => {
 		const [group] = await tx
 			.insert(groupsTable)
 			.values({
 				name,
 				icon,
 				color,
-				created_by: currentUserId,
+				created_by: currentUserInternalId,
 			})
 			.returning({ internal_id: groupsTable.internal_id });
 
 		const userRows = users.map((userInternalId) => ({
 			group_id: group.internal_id,
 			user_id: userInternalId,
-			is_admin: userInternalId === currentUserId,
+			is_admin: userInternalId === currentUserInternalId,
 		}));
 
 		const guestRows = guests.map((guestName) => ({
@@ -94,33 +125,48 @@ export async function createAGroup(
 }
 
 export async function getGroupDataByGroupId(groupId: string) {
-	const [group] = await db!
-		.select()
-		.from(groupsTable)
-		.where(eq(groupsTable.id, groupId))
-		.limit(1);
+	// Perform a single query to get group info joined with members
+	const rows = await getGroupMemberDataOfGroup(groupId);
 
-	if (!group) throw new APIError(STATUS_CODES.NOT_FOUND, "Group not found");
+	// If no rows returned, the group doesn't exist
+	if (rows.length === 0) {
+		throw new APIError(STATUS_CODES.NOT_FOUND, "Group not found");
+	}
 
-	const members = await db!
+	// The group data is identical in every row, so we just take the first one
+	const group = rows[0].group;
+
+	// Extract the member objects from the rows
+	const members = rows.map((r) => r.member);
+
+	return {
+		group,
+		members,
+	};
+}
+
+async function getGroupMemberDataOfGroup(groupId: string) {
+	return db!
 		.select({
-			member_id: groupMembersTable.id,
-			user_id: usersTable.id,
-			internal_id: usersTable.internal_id,
-			// Use user's full_name if available, otherwise fallback to the guest name in group_members
-			name: sql<string>`coalesce(${usersTable.full_name}, ${groupMembersTable.name})`,
-			email: usersTable.email,
-			avatar_url: usersTable.avatar_url,
+			group: groupsTable,
+			member: {
+				member_id: groupMembersTable.id,
+				user_id: usersTable.id,
+				internal_id: usersTable.internal_id,
+				// Use user's full_name if available (registered user), otherwise fallback to the guest name
+				name: sql<string>`coalesce(${usersTable.full_name}, ${groupMembersTable.name})`,
+				email: usersTable.email,
+				avatar_url: usersTable.avatar_url,
+			},
 		})
-		.from(groupMembersTable)
+		.from(groupsTable)
+		.leftJoin(
+			groupMembersTable,
+			eq(groupsTable.internal_id, groupMembersTable.group_id),
+		)
 		.leftJoin(
 			usersTable,
 			eq(groupMembersTable.user_id, usersTable.internal_id),
 		)
-		.where(eq(groupMembersTable.group_id, group.internal_id));
-
-	return {
-		group,
-		members
-	}
+		.where(eq(groupsTable.id, groupId));
 }
