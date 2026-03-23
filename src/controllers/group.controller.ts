@@ -1,5 +1,10 @@
 import type { NextFunction, Request, Response } from "express";
-import { createAGroup, getAllGroupsOfUser, getGroupDataByGroupId } from "../services/group.service.ts";
+import {
+	changeGroupGuestName,
+	createAGroup,
+	getAllGroupsOfUser,
+	getGroupDataByGroupId,
+} from "../services/group.service.ts";
 import { RESPONSE_STATUS, STATUS_CODES } from "../lib/constants.ts";
 import logger from "../lib/utils/logger.ts";
 
@@ -41,7 +46,11 @@ export async function createGroup(
 	});
 }
 
-export async function getGroupData(req: Request, res: Response, next: NextFunction) {
+export async function getGroupData(
+	req: Request,
+	res: Response,
+	next: NextFunction,
+) {
 	const groupId = req.params.groupId as string;
 
 	try {
@@ -52,8 +61,27 @@ export async function getGroupData(req: Request, res: Response, next: NextFuncti
 			status: RESPONSE_STATUS.SUCCESS,
 			message: "Retrieved group data",
 			group,
-			members
-		})
+			members,
+		});
+	} catch (err) {
+		next(err);
+	}
+}
+
+export async function editGuestName(
+	req: Request,
+	res: Response,
+	next: NextFunction,
+) {
+	try {
+		const { memberId, name } = req.body;
+
+		await changeGroupGuestName(memberId, name, req.user!.internal_id!);
+
+		return res.status(STATUS_CODES.OK).json({
+			status: RESPONSE_STATUS.SUCCESS,
+			message: "Successfully changed guest's name",
+		});
 	} catch (err) {
 		next(err);
 	}

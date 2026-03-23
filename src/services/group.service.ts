@@ -1,6 +1,6 @@
 import db from "../database/client.ts";
 import { groupsTable } from "../database/schemas/groups.ts";
-import { eq, sql } from "drizzle-orm";
+import { aliasedTable, and, eq, sql } from "drizzle-orm";
 import { groupMembersTable } from "../database/schemas/groupMembers.ts";
 import { APIError } from "../errors/api.error.ts";
 import { STATUS_CODES } from "../lib/constants.ts";
@@ -17,24 +17,18 @@ export async function getAllGroupsOfUser(userInternalId: number) {
 			created_at: groupsTable.created_at,
 			created_by: groupsTable.created_by,
 			// Count all members (including guests) in the group
-			member_count: sql<number>`(
-				select count(*)::int
-				from ${groupMembersTable}
-				where ${groupMembersTable.group_id} = ${groupsTable.internal_id}
-			)`,
+			member_count: sql<number>`(select count(*) ::int
+                                       from ${groupMembersTable}
+                                       where ${groupMembersTable.group_id} = ${groupsTable.internal_id})`,
 			// Get up to 2 avatars of OTHER members (excluding current user)
-			avatars: sql<string[]>`(
-				select coalesce(array_agg(avatar_url), '{}')
-				from (
-					select ${usersTable.avatar_url}
-					from ${groupMembersTable}
-					join ${usersTable} on ${groupMembersTable.user_id} = ${usersTable.internal_id}
-					where ${groupMembersTable.group_id} = ${groupsTable.internal_id}
-					and ${groupMembersTable.user_id} != ${userInternalId}
-					and ${usersTable.avatar_url} is not null
-					limit 2
-				) as t
-			)`,
+			avatars: sql<string[]>`(select coalesce(array_agg(avatar_url), '{}')
+                                    from (select ${usersTable.avatar_url}
+                                          from ${groupMembersTable}
+                                                   join ${usersTable} on ${groupMembersTable.user_id} = ${usersTable.internal_id}
+                                          where ${groupMembersTable.group_id} = ${groupsTable.internal_id}
+                                            and ${groupMembersTable.user_id} != ${userInternalId}
+                                            and ${usersTable.avatar_url} is not null
+                                              limit 2) as t)`,
 		})
 		.from(groupMembersTable)
 		.innerJoin(
@@ -154,7 +148,10 @@ async function getGroupMemberDataOfGroup(groupId: string) {
 				user_id: usersTable.id,
 				internal_id: usersTable.internal_id,
 				// Use user's full_name if available (registered user), otherwise fallback to the guest name
-				name: sql<string>`coalesce(${usersTable.full_name}, ${groupMembersTable.name})`,
+				name: sql<string>`coalesce(
+                ${usersTable.full_name},
+                ${groupMembersTable.name}
+                )`,
 				email: usersTable.email,
 				avatar_url: usersTable.avatar_url,
 			},
@@ -169,4 +166,64 @@ async function getGroupMemberDataOfGroup(groupId: string) {
 			eq(groupMembersTable.user_id, usersTable.internal_id),
 		)
 		.where(eq(groupsTable.id, groupId));
+}
+
+export async function changeGroupGuestName(
+	memberId: number,
+	name: string,
+	currentUserInternalId: number,
+) {
+	const validateAction = await validateChangeGroupGuestNameAction(
+		currentUserInternalId,
+		memberId,
+		name,
+	);
+
+	if (!validateAction) return;
+
+	await changeName(memberId, name);
+}
+
+async function validateChangeGroupGuestNameAction(
+	userInternalId: number,
+	memberId: number,
+	name: string,
+) {
+	const targetMember = aliasedTable(groupMembersTable, "target_member");
+	const currentUserMember = aliasedTable(
+		groupMembersTable,
+		"current_user_member",
+	);
+
+	const result = await db!
+		.select({ id: targetMember.id, name: targetMember.name })
+		.from(targetMember)
+		.innerJoin(
+			currentUserMember,
+			eq(targetMember.group_id, currentUserMember.group_id),
+		)
+		.where(
+			and(
+				// Find the specific member record by ID
+				eq(targetMember.id, memberId),
+				// Ensure the current user is also in that group
+				eq(currentUserMember.user_id, userInternalId),
+			),
+		)
+		.limit(1);
+
+	if (result.length == 0)
+		throw new APIError(
+			STATUS_CODES.FORBIDDEN,
+			"You are not authorized to make changes",
+		);
+
+	return result[0].name !== name;
+}
+
+async function changeName(memberId: number, name: string) {
+	await db!
+		.update(groupMembersTable)
+		.set({ name })
+		.where(eq(groupMembersTable.id, memberId));
 }

@@ -34,3 +34,10 @@ export const GetGroupDataSchema = z.object({
 		groupId: z.uuid("Invalid groupId"),
 	}),
 });
+
+export const EditGuestNameSchema = z.object({
+	body: z.object({
+		memberId: z.number("Invalid memberId"),
+		name: z.string().min(1, "Invalid name"),
+	}),
+});
