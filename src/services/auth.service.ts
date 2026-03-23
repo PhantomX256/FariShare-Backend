@@ -1,6 +1,7 @@
 import { GOOGLE_CLIENT_ID, JWT_SECRET } from "../lib/constants.ts";
 import logger from "../lib/utils/logger.ts";
-import { OAuth2Client, TokenPayload } from "google-auth-library";
+import { OAuth2Client } from "google-auth-library";
+import type { TokenPayload } from "google-auth-library";
 import { usersTable } from "../database/schemas/users.ts";
 import db from "../database/client.ts";
 import jwt from "jsonwebtoken";
