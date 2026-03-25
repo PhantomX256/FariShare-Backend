@@ -5,6 +5,7 @@ import { groupMembersTable } from "../database/schemas/groupMembers.ts";
 import { APIError } from "../errors/api.error.ts";
 import { STATUS_CODES } from "../lib/constants.ts";
 import { usersTable } from "../database/schemas/users.ts";
+import { inArray } from "drizzle-orm/sql/expressions/conditions";
 
 export async function getAllGroupsOfUser(userInternalId: number) {
 	return db!
@@ -226,4 +227,152 @@ async function changeName(memberId: number, name: string) {
 		.update(groupMembersTable)
 		.set({ name })
 		.where(eq(groupMembersTable.id, memberId));
+}
+
+export async function changeGroupData(
+	groupId: string,
+	newUsers: number[],
+	newGuests: string[],
+	removeMembers: number[],
+	currentUserInternalId: number,
+	name?: string,
+	icon?: string,
+	color?: string,
+) {
+	try {
+		const { groupValues, removeValues, memberValues } =
+			await validateAndGetChangedFields(
+				groupId,
+				newUsers,
+				newGuests,
+				removeMembers,
+				currentUserInternalId,
+				name,
+				icon,
+				color,
+			);
+
+		await db!.transaction(async (tx) => {
+			if (groupValues) await tx.update(groupsTable).set(groupValues).where(eq(groupsTable.id, groupId));
+
+			if (memberValues.length > 0)
+				await tx.insert(groupMembersTable).values(memberValues);
+
+			if (removeValues.length > 0)
+				await tx
+					.delete(groupMembersTable)
+					.where(inArray(groupMembersTable.id, removeValues));
+		});
+	} catch (err) {
+		throw err;
+	}
+}
+
+async function validateAndGetChangedFields(
+	groupId: string,
+	newUsers: number[],
+	newGuests: string[],
+	removeMembers: number[],
+	currentUserInternalId: number,
+	name?: string,
+	icon?: string,
+	color?: string,
+) {
+	// Check if any field is there to edit
+	if (
+		!name &&
+		!icon &&
+		!color &&
+		newUsers.length === 0 &&
+		newGuests.length === 0 &&
+		removeMembers.length === 0
+	)
+		throw new APIError(STATUS_CODES.BAD_REQUEST, "No fields are new");
+
+	// Check if the user is adding themselves
+	if (newUsers.includes(currentUserInternalId))
+		throw new APIError(
+			STATUS_CODES.BAD_REQUEST,
+			"You cannot add yourself to the group",
+		);
+
+	const { group, members } = await getGroupDataByGroupId(groupId);
+
+	// Check if the user can make changes to the group
+	if (group.created_by !== currentUserInternalId)
+		throw new APIError(
+			STATUS_CODES.FORBIDDEN,
+			"You are not allowed to edit this group",
+		);
+
+	// Check if the members being added are already there
+	if (
+		members.some((member) =>
+			member.internal_id ? newUsers.includes(member.internal_id) : false,
+		)
+	)
+		throw new APIError(
+			STATUS_CODES.BAD_REQUEST,
+			"The member you are trying to add is already there",
+		);
+
+	const membersToRemove = members.filter((member) =>
+		member.member_id ? removeMembers.includes(member.member_id) : false,
+	);
+
+	// Check if the members being removed are even in the group
+	if (membersToRemove.length !== removeMembers.length)
+		throw new APIError(
+			STATUS_CODES.BAD_REQUEST,
+			"One or more members you are trying to remove are not a member of this group",
+		);
+
+	const userIdsToRemove = membersToRemove
+		.map((member) => member.internal_id)
+		.filter((id) => id !== null);
+
+	// Check if the users being added aren't being removed in the same request
+	if (
+		newUsers.some((userInternalId) =>
+			userIdsToRemove.includes(userInternalId),
+		)
+	)
+		throw new APIError(
+			STATUS_CODES.BAD_REQUEST,
+			"You are adding and removing a user in a single request",
+		);
+
+	// Check if the user is removing themselves
+	if (userIdsToRemove.includes(currentUserInternalId))
+		throw new APIError(
+			STATUS_CODES.BAD_REQUEST,
+			"You are trying to remove yourself",
+		);
+
+	// Get changed values to insert in group table
+	const groupValues: { name?: string; icon?: string; color?: string } = {};
+	if (name && name !== group.name) groupValues.name = name;
+	if (icon && icon !== group.icon) groupValues.icon = icon;
+	if (color && color !== group.color) groupValues.color = color;
+
+	// Get member values in inserting format
+	const userValues = newUsers.map((userInternalId) => ({
+		group_id: group.internal_id,
+		user_id: userInternalId,
+		is_admin: false,
+	}));
+
+	const guestValues = newGuests.map((name) => ({
+		group_id: group.internal_id,
+		name: name,
+		is_admin: false,
+	}));
+
+	const memberValues = [...userValues, ...guestValues];
+
+	return {
+		groupValues: Object.keys(groupValues).length > 0 ? groupValues : null,
+		memberValues,
+		removeValues: removeMembers,
+	};
 }

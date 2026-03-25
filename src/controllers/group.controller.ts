@@ -1,5 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
 import {
+	changeGroupData,
 	changeGroupGuestName,
 	createAGroup,
 	getAllGroupsOfUser,
@@ -77,10 +78,39 @@ export async function editGuestName(
 		const { memberId, name } = req.body;
 
 		await changeGroupGuestName(memberId, name, req.user!.internal_id!);
+		logger.debug("Changed the name of member: " + memberId);
 
 		return res.status(STATUS_CODES.OK).json({
 			status: RESPONSE_STATUS.SUCCESS,
 			message: "Successfully changed guest's name",
+		});
+	} catch (err) {
+		next(err);
+	}
+}
+
+export async function editGroup(
+	req: Request,
+	res: Response,
+	next: NextFunction,
+) {
+	try {
+		const { editGroupRequest } = req.body;
+		await changeGroupData(
+			editGroupRequest.groupId,
+			editGroupRequest.newUsers,
+			editGroupRequest.newGuests,
+			editGroupRequest.removeMembers,
+			req.user!.internal_id,
+			editGroupRequest.name,
+			editGroupRequest.icon,
+			editGroupRequest.color,
+		);
+		logger.debug("Successfully edited group: " + editGroupRequest.groupId);
+
+		return res.status(STATUS_CODES.OK).json({
+			status: RESPONSE_STATUS.SUCCESS,
+			message: "Successfully edited the group",
 		});
 	} catch (err) {
 		next(err);

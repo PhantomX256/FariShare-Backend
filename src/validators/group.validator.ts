@@ -41,3 +41,27 @@ export const EditGuestNameSchema = z.object({
 		name: z.string().min(1, "Invalid name"),
 	}),
 });
+
+export const EditGroupSchema = z.object({
+	body: z.object({
+		editGroupRequest: z.object({
+			name: z.string().min(1).optional(),
+			icon: z.enum(ALLOWED_ICONS).optional(),
+			color: z.string().min(1).optional(),
+			newUsers: z
+				.array(z.number())
+				.refine(
+					(arr) => new Set(arr).size === arr.length,
+					"newUsers must be unique",
+				),
+			newGuests: z.array(z.string().min(1)),
+			removeMembers: z
+				.array(z.number())
+				.refine(
+					(arr) => new Set(arr).size === arr.length,
+					"removeMembers must be unique",
+				),
+			groupId: z.string().min(1, "Invalid Group"),
+		}),
+	}),
+});
