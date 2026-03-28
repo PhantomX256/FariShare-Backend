@@ -10,7 +10,7 @@ export const friendsTable = pgTable(
 		friend_id: integer("friend_id")
 			.notNull()
 			.references(() => usersTable.internal_id),
-		created_at: timestamp("created_at").defaultNow(),
+		created_at: timestamp("created_at").defaultNow().notNull(),
 	},
 	(table) => [primaryKey({ columns: [table.user_id, table.friend_id] })],
 );

@@ -7,11 +7,15 @@ import { APIError } from "../errors/api.error.ts";
 import { STATUS_CODES } from "../lib/constants.ts";
 import { alias } from "drizzle-orm/pg-core";
 import { getUserDataByEmailOrId } from "./user.service.ts";
+import { User } from "../types/user.types.ts";
+import { FriendRequest, Friendship, ReceivedRequest, RequestActionParams, SentRequest } from "../types/friend.types.ts";
 
 /**
  *	Retrieves the internal ids of all friends of the user
  */
-export async function getAllFriendsOfUser(userInternalId: number) {
+export async function getAllFriendsOfUser(
+	userInternalId: number,
+): Promise<User[]> {
 	const friendTable = alias(usersTable, "friend");
 
 	return db!
@@ -118,7 +122,10 @@ async function validateSendFriendRequestAction(
  * Given two user internal ids, function returns a request
  * if it exists between the two users
  */
-async function getFriendRequestByIds(firstId: number, secondId: number) {
+async function getFriendRequestByIds(
+	firstId: number,
+	secondId: number,
+): Promise<FriendRequest> {
 	const [friendRequest] = await db!
 		.select()
 		.from(friendRequestsTable)
@@ -142,7 +149,10 @@ async function getFriendRequestByIds(firstId: number, secondId: number) {
  * Given two user internal ids, function returns a friendship
  * if it exists between the two users
  */
-async function getFriendshipByIds(firstId: number, secondId: number) {
+async function getFriendshipByIds(
+	firstId: number,
+	secondId: number,
+): Promise<Friendship> {
 	const [friendship] = await db!
 		.select()
 		.from(friendsTable)
@@ -173,7 +183,9 @@ async function createRequest(senderId: number, receiverId: number) {
 /**
  *	Gets all friends requests sent by the user
  */
-export async function getAllSentRequests(userInternalId: number) {
+export async function getAllSentRequests(
+	userInternalId: number,
+): Promise<SentRequest[]> {
 	const receiverTable = alias(usersTable, "receiver");
 
 	return db!
@@ -202,7 +214,7 @@ export async function getAllSentRequests(userInternalId: number) {
  */
 export async function getAllReceivedRequests(
 	userInternalId: number,
-) {
+): Promise<ReceivedRequest[]> {
 	const senderTable = alias(usersTable, "sender");
 
 	return db!
@@ -226,19 +238,11 @@ export async function getAllReceivedRequests(
 		.where(eq(friendRequestsTable.receiver_id, userInternalId));
 }
 
-export async function handleRequestAction(
-	senderId: number,
-	receiverId: number,
-	userInternalId: number,
-	accept: boolean,
-) {
+export async function handleRequestAction(params: RequestActionParams) {
 	try {
-		await validateFriendRequestAction(
-			senderId,
-			receiverId,
-			userInternalId,
-			accept,
-		);
+		const { senderId, receiverId, accept } = params;
+
+		await validateFriendRequestAction(params);
 
 		if (accept) {
 			await acceptFriendRequest(senderId, receiverId);
@@ -253,12 +257,9 @@ export async function handleRequestAction(
 /**
  * Performs the necessary on any action taken on a request
  */
-async function validateFriendRequestAction(
-	senderId: number,
-	receiverId: number,
-	userInternalId: number,
-	accept: boolean,
-) {
+async function validateFriendRequestAction(params: RequestActionParams) {
+	const { senderId, receiverId, userInternalId, accept } = params;
+
 	// Check if the request exists
 	const request = await getFriendRequestByIds(senderId, receiverId);
 
@@ -284,10 +285,7 @@ async function validateFriendRequestAction(
 /**
  *	Accepts a friend request
  */
-async function acceptFriendRequest(
-	senderId: number,
-	receiverId: number,
-) {
+async function acceptFriendRequest(senderId: number, receiverId: number) {
 	await removeFriendRequest(senderId, receiverId);
 	await createFriendship(senderId, receiverId);
 }
@@ -305,10 +303,7 @@ async function createFriendship(
 /**
  *	Rejects a friend request
  */
-async function removeFriendRequest(
-	senderId: number,
-	receiverId: number,
-) {
+async function removeFriendRequest(senderId: number, receiverId: number) {
 	await db!
 		.delete(friendRequestsTable)
 		.where(

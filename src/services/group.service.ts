@@ -6,8 +6,20 @@ import { APIError } from "../errors/api.error.ts";
 import { STATUS_CODES } from "../lib/constants.ts";
 import { usersTable } from "../database/schemas/users.ts";
 import { inArray } from "drizzle-orm/sql/expressions/conditions";
+import {
+	ChangedGroupDataFields,
+	ChangedGroupDataFieldsParams,
+	ChangeGroupDataParams,
+	CreateGroupParams,
+	Group,
+	GroupData,
+	GroupDataDB,
+	ValidateChangeGroupDataParams,
+} from "../types/group.types.ts";
 
-export async function getAllGroupsOfUser(userInternalId: number) {
+export async function getAllGroupsOfUser(
+	userInternalId: number,
+): Promise<Group[]> {
 	return db!
 		.select({
 			id: groupsTable.id,
@@ -39,36 +51,19 @@ export async function getAllGroupsOfUser(userInternalId: number) {
 		.where(eq(groupMembersTable.user_id, userInternalId));
 }
 
-export async function createAGroup(
-	name: string,
-	icon: string,
-	color: string,
-	users: number[],
-	guests: string[],
-	currentUserInternalId: number,
-) {
+export async function createAGroup(params: CreateGroupParams) {
 	try {
-		validateCreateGroupData(users, guests, currentUserInternalId);
+		validateCreateGroupData(params);
 	} catch (err) {
 		// Throw error to controller to handle
 		throw err;
 	}
 
-	await createGroupWithData(
-		name,
-		icon,
-		color,
-		users,
-		guests,
-		currentUserInternalId,
-	);
+	await createGroupWithData(params);
 }
 
-function validateCreateGroupData(
-	users: number[],
-	guests: string[],
-	currentUserInternalId: number,
-) {
+function validateCreateGroupData(params: CreateGroupParams) {
+	const { users, guests, currentUserInternalId } = params;
 	if (users.length === 1 && guests.length === 0)
 		throw new APIError(
 			STATUS_CODES.BAD_REQUEST,
@@ -82,14 +77,9 @@ function validateCreateGroupData(
 		);
 }
 
-async function createGroupWithData(
-	name: string,
-	icon: string,
-	color: string,
-	users: number[],
-	guests: string[],
-	currentUserInternalId: number,
-) {
+async function createGroupWithData(params: CreateGroupParams) {
+	const { name, icon, color, users, guests, currentUserInternalId } = params;
+
 	await db!.transaction(async (tx) => {
 		const [group] = await tx
 			.insert(groupsTable)
@@ -119,7 +109,9 @@ async function createGroupWithData(
 	});
 }
 
-export async function getGroupDataByGroupId(groupId: string) {
+export async function getGroupDataByGroupId(
+	groupId: string,
+): Promise<GroupData> {
 	// Perform a single query to get group info joined with members
 	const rows = await getGroupMemberDataOfGroup(groupId);
 
@@ -140,7 +132,9 @@ export async function getGroupDataByGroupId(groupId: string) {
 	};
 }
 
-async function getGroupMemberDataOfGroup(groupId: string) {
+async function getGroupMemberDataOfGroup(
+	groupId: string,
+): Promise<GroupDataDB[]> {
 	return db!
 		.select({
 			group: groupsTable,
@@ -155,10 +149,11 @@ async function getGroupMemberDataOfGroup(groupId: string) {
                 )`,
 				email: usersTable.email,
 				avatar_url: usersTable.avatar_url,
+				joined_at: groupMembersTable.joined_at,
 			},
 		})
 		.from(groupsTable)
-		.leftJoin(
+		.innerJoin(
 			groupMembersTable,
 			eq(groupsTable.internal_id, groupMembersTable.group_id),
 		)
@@ -229,56 +224,38 @@ async function changeName(memberId: number, name: string) {
 		.where(eq(groupMembersTable.id, memberId));
 }
 
-export async function changeGroupData(
-	groupId: string,
-	newUsers: number[],
-	newGuests: string[],
-	removeMembers: number[],
-	currentUserInternalId: number,
-	name?: string,
-	icon?: string,
-	color?: string,
-) {
+export async function changeGroupData(params: ChangeGroupDataParams) {
 	try {
-		const { groupValues, removeValues, memberValues } =
-			await validateAndGetChangedFields(
-				groupId,
-				newUsers,
-				newGuests,
-				removeMembers,
-				currentUserInternalId,
-				name,
-				icon,
-				color,
-			);
+		const { groupId } = params;
 
-		await db!.transaction(async (tx) => {
-			if (groupValues) await tx.update(groupsTable).set(groupValues).where(eq(groupsTable.id, groupId));
+		const { group, members } = await getGroupDataByGroupId(params.groupId);
 
-			if (memberValues.length > 0)
-				await tx.insert(groupMembersTable).values(memberValues);
+		validateChangeGroupDataAction({ ...params, group, members });
 
-			if (removeValues.length > 0)
-				await tx
-					.delete(groupMembersTable)
-					.where(inArray(groupMembersTable.id, removeValues));
+		const changedGroupDataFields = getChangedGroupDataFields({
+			...params,
+			group,
 		});
+
+		await updateGroupData(changedGroupDataFields, groupId);
 	} catch (err) {
 		throw err;
 	}
 }
 
-async function validateAndGetChangedFields(
-	groupId: string,
-	newUsers: number[],
-	newGuests: string[],
-	removeMembers: number[],
-	currentUserInternalId: number,
-	name?: string,
-	icon?: string,
-	color?: string,
-) {
-	// Check if any field is there to edit
+function validateChangeGroupDataAction(params: ValidateChangeGroupDataParams) {
+	const {
+		name,
+		group,
+		members,
+		removeMembers,
+		currentUserInternalId,
+		newUsers,
+		newGuests,
+		icon,
+		color,
+	} = params;
+
 	if (
 		!name &&
 		!icon &&
@@ -295,8 +272,6 @@ async function validateAndGetChangedFields(
 			STATUS_CODES.BAD_REQUEST,
 			"You cannot add yourself to the group",
 		);
-
-	const { group, members } = await getGroupDataByGroupId(groupId);
 
 	// Check if the user can make changes to the group
 	if (group.created_by !== currentUserInternalId)
@@ -348,6 +323,13 @@ async function validateAndGetChangedFields(
 			STATUS_CODES.BAD_REQUEST,
 			"You are trying to remove yourself",
 		);
+}
+
+function getChangedGroupDataFields(
+	params: ChangedGroupDataFieldsParams,
+): ChangedGroupDataFields {
+	const { name, group, removeMembers, newUsers, newGuests, icon, color } =
+		params;
 
 	// Get changed values to insert in group table
 	const groupValues: { name?: string; icon?: string; color?: string } = {};
@@ -375,4 +357,27 @@ async function validateAndGetChangedFields(
 		memberValues,
 		removeValues: removeMembers,
 	};
+}
+
+async function updateGroupData(
+	changedGroupDataFields: ChangedGroupDataFields,
+	groupId: string,
+) {
+	const { groupValues, removeValues, memberValues } = changedGroupDataFields;
+
+	await db!.transaction(async (tx) => {
+		if (groupValues)
+			await tx
+				.update(groupsTable)
+				.set(groupValues)
+				.where(eq(groupsTable.id, groupId));
+
+		if (memberValues.length > 0)
+			await tx.insert(groupMembersTable).values(memberValues);
+
+		if (removeValues.length > 0)
+			await tx
+				.delete(groupMembersTable)
+				.where(inArray(groupMembersTable.id, removeValues));
+	});
 }

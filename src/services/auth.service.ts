@@ -1,10 +1,11 @@
 import { GOOGLE_CLIENT_ID, JWT_SECRET } from "../lib/constants.ts";
 import logger from "../lib/utils/logger.ts";
-import { OAuth2Client } from "google-auth-library";
 import type { TokenPayload } from "google-auth-library";
+import { OAuth2Client } from "google-auth-library";
 import { usersTable } from "../database/schemas/users.ts";
 import db from "../database/client.ts";
 import jwt from "jsonwebtoken";
+import { User } from "../types/user.types.ts";
 
 const client = new OAuth2Client(GOOGLE_CLIENT_ID);
 logger.debug("Google OAuth Client created successfully");
@@ -14,7 +15,9 @@ logger.debug("Google OAuth Client created successfully");
  *  user's details and then enters them into the db
  *  and returns a JWT
  */
-export async function getJWTFromTokenAndInsertIntoDb(credential: string) {
+export async function getJWTFromTokenAndInsertIntoDb(
+	credential: string,
+): Promise<{ token: string; user: User }> {
 	// Verify the token from Google
 	const ticket = await client.verifyIdToken({
 		idToken: credential,
@@ -41,7 +44,7 @@ export async function getJWTFromTokenAndInsertIntoDb(credential: string) {
 	return { token, user };
 }
 
-async function insertUserDetailsIntoDb(payload: TokenPayload) {
+async function insertUserDetailsIntoDb(payload: TokenPayload): Promise<User> {
 	const [user] = await db!
 		.insert(usersTable)
 		.values({
