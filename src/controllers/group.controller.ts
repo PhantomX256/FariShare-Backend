@@ -28,23 +28,17 @@ export async function createGroup(
 	const { createGroupForm } = req.body;
 
 	try {
-		await createAGroup(
-			createGroupForm.name,
-			createGroupForm.icon,
-			createGroupForm.color,
-			createGroupForm.users,
-			createGroupForm.guests,
-			req.user!.internal_id,
-		);
+		await createAGroup({ ...createGroupForm, currentUserInternalId: req.user!.internal_id });
 		logger.debug("Successfully created a group: " + createGroupForm.name);
+
+		return res.status(STATUS_CODES.CREATED).json({
+			status: RESPONSE_STATUS.SUCCESS,
+			message: "Group created successfully",
+		});
 	} catch (err) {
 		next(err);
 	}
 
-	return res.status(STATUS_CODES.CREATED).json({
-		status: RESPONSE_STATUS.SUCCESS,
-		message: "Group created successfully",
-	});
 }
 
 export async function getGroupData(
@@ -96,16 +90,7 @@ export async function editGroup(
 ) {
 	try {
 		const { editGroupRequest } = req.body;
-		await changeGroupData(
-			editGroupRequest.groupId,
-			editGroupRequest.newUsers,
-			editGroupRequest.newGuests,
-			editGroupRequest.removeMembers,
-			req.user!.internal_id,
-			editGroupRequest.name,
-			editGroupRequest.icon,
-			editGroupRequest.color,
-		);
+		await changeGroupData({ ...editGroupRequest, currentUserInternalId: req.user!.internal_id });
 		logger.debug("Successfully edited group: " + editGroupRequest.groupId);
 
 		return res.status(STATUS_CODES.OK).json({

@@ -1,7 +1,7 @@
 import db from "../database/client.ts";
 import { usersTable } from "../database/schemas/users.ts";
 import { eq } from "drizzle-orm";
-import { BasicUserLookup, User } from "../types/user.types.ts";
+import type { BasicUserLookup, User } from "../types/user.types.ts";
 
 /**
  *  Get the user's data from the database
@@ -15,7 +15,9 @@ export async function getUserDataById(userInternalId: number): Promise<User> {
 	return user;
 }
 
-export async function getUserDataByEmailOrId(emailOrId: string): Promise<BasicUserLookup | undefined> {
+export async function getUserDataByEmailOrId(
+	emailOrId: string,
+): Promise<BasicUserLookup | undefined> {
 	const isEmail = emailOrId.includes("@");
 
 	const [user] = await db!

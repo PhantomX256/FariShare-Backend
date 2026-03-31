@@ -5,7 +5,7 @@ import { OAuth2Client } from "google-auth-library";
 import { usersTable } from "../database/schemas/users.ts";
 import db from "../database/client.ts";
 import jwt from "jsonwebtoken";
-import { User } from "../types/user.types.ts";
+import type { User } from "../types/user.types.ts";
 
 const client = new OAuth2Client(GOOGLE_CLIENT_ID);
 logger.debug("Google OAuth Client created successfully");

@@ -76,12 +76,7 @@ export async function respondToRequest(
 	try {
 		const { senderId, receiverId, accept } = req.body;
 
-		await handleRequestAction(
-			senderId,
-			receiverId,
-			req.user!.internal_id,
-			accept,
-		);
+		await handleRequestAction({ senderId, receiverId, accept, userInternalId: req.user!.internal_id });
 
 		return res.status(STATUS_CODES.OK).json({
 			status: RESPONSE_STATUS.SUCCESS,

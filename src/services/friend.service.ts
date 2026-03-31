@@ -7,8 +7,8 @@ import { APIError } from "../errors/api.error.ts";
 import { STATUS_CODES } from "../lib/constants.ts";
 import { alias } from "drizzle-orm/pg-core";
 import { getUserDataByEmailOrId } from "./user.service.ts";
-import { User } from "../types/user.types.ts";
-import { FriendRequest, Friendship, ReceivedRequest, RequestActionParams, SentRequest } from "../types/friend.types.ts";
+import type { User } from "../types/user.types.ts";
+import type { FriendRequest, Friendship, ReceivedRequest, RequestActionParams, SentRequest } from "../types/friend.types.ts";
 
 /**
  *	Retrieves the internal ids of all friends of the user

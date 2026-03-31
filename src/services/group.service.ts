@@ -6,7 +6,7 @@ import { APIError } from "../errors/api.error.ts";
 import { STATUS_CODES } from "../lib/constants.ts";
 import { usersTable } from "../database/schemas/users.ts";
 import { inArray } from "drizzle-orm/sql/expressions/conditions";
-import {
+import type {
 	ChangedGroupDataFields,
 	ChangedGroupDataFieldsParams,
 	ChangeGroupDataParams,
