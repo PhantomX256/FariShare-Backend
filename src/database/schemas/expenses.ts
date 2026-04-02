@@ -17,5 +17,6 @@ export const expensesTable = pgTable("expenses", {
 		.references(() => groupsTable.internal_id),
 	title: text("title").notNull(),
 	amount: decimal("amount", { precision: 14, scale: 3 }).notNull(),
+	split_mode: text("split_mode").notNull(),
 	created_at: timestamp("created_at").defaultNow().notNull(),
 });
