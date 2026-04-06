@@ -11,6 +11,7 @@ import { logRequest } from "./middlewares/logger.middleware.ts";
 import userRoutes from "./routes/user.route.ts";
 import friendRoute from "./routes/friend.route.ts";
 import groupRoute from "./routes/group.route.ts";
+import expenseRoute from "./routes/expense.route.ts";
 
 // Create an Express application
 const app = express();
@@ -42,6 +43,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/app/user", userRoutes);
 app.use("/api/app/friend", friendRoute);
 app.use("/api/app/group", groupRoute);
+app.use("/api/app/expense", expenseRoute);
 
 // Handling all 404 errors
 app.all("*", (req, res, next) => {
