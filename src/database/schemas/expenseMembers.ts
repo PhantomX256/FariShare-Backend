@@ -11,12 +11,12 @@ export const expenseMembersTable = pgTable(
 		member_id: integer("member_id")
 			.notNull()
 			.references(() => groupMembersTable.id),
-		paid_amount: decimal("paid_amount", { precision: 14, scale: 3 })
+		paid_amount: decimal("paid_amount", { precision: 14, scale: 2 })
 			.default("0")
 			.notNull(),
 		owed_amount: decimal("owed_amount", {
 			precision: 14,
-			scale: 3,
+			scale: 2,
 		}).notNull(),
 	},
 	(table) => [primaryKey({ columns: [table.expense_id, table.member_id] })],
