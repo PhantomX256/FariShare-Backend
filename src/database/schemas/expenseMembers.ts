@@ -1,4 +1,4 @@
-import { decimal, integer, pgTable, primaryKey } from "drizzle-orm/pg-core";
+import { integer, pgTable, primaryKey } from "drizzle-orm/pg-core";
 import { expensesTable } from "./expenses.ts";
 import { groupMembersTable } from "./groupMembers.ts";
 
@@ -11,13 +11,8 @@ export const expenseMembersTable = pgTable(
 		member_id: integer("member_id")
 			.notNull()
 			.references(() => groupMembersTable.id),
-		paid_amount: decimal("paid_amount", { precision: 14, scale: 2 })
-			.default("0")
-			.notNull(),
-		owed_amount: decimal("owed_amount", {
-			precision: 14,
-			scale: 2,
-		}).notNull(),
+		paid_amount: integer("paid_amount").default(0).notNull(),
+		owed_amount: integer("owed_amount").notNull(),
 	},
 	(table) => [primaryKey({ columns: [table.expense_id, table.member_id] })],
 );

@@ -1,10 +1,14 @@
 import { Router } from "express";
 import { validateMiddleware } from "../middlewares/validate.middleware.ts";
-import { GetExpenseSchema } from "../validators/expense.validator.ts";
-import { getExpenses } from "../controllers/expense.controller.ts";
+import {
+	AddExpenseSchema,
+	GetExpenseSchema,
+} from "../validators/expense.validator.ts";
+import { addExpense, getExpenses } from "../controllers/expense.controller.ts";
 
 const router = Router();
 
-router.post("/", validateMiddleware(GetExpenseSchema), getExpenses);
+router.get("/", validateMiddleware(GetExpenseSchema), getExpenses);
+router.post("/", validateMiddleware(AddExpenseSchema), addExpense);
 
 export default router;

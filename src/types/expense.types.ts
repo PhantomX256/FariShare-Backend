@@ -3,11 +3,49 @@ export interface Expense {
 	id: string;
 	title: string;
 	icon: string;
-	amount: string;
+	amount: number;
 	split_mode: string | null;
 	is_transaction: boolean;
 	created_at: Date;
-	user_owed_amount: string | null;
-	user_paid_amount: string | null;
-	paid_by_member_ids: number[];
+	user_balance: number;
+	paid_by: number[];
+}
+
+export interface AddExpenseRequest {
+	groupId: string;
+	title: string;
+	icon: string;
+	amount: number;
+	paidBy: Payer[];
+	splitMode: SplitMode;
+	membersInvolved: InvolvedMember[];
+	isTransaction: boolean;
+}
+
+export interface Payer {
+	memberId: number;
+	paidAmount: number;
+}
+
+export interface InvolvedMember {
+	memberId: number;
+	owedAmount: number;
+}
+
+export type SplitMode = "equally" | "parts" | "specific";
+
+export interface ExpenseRow {
+	group_id: number;
+	title: string;
+	icon: string;
+	amount: number;
+	split_mode: SplitMode;
+	is_transaction: boolean;
+}
+
+export interface ExpenseMemberRows {
+	expense_id: number;
+	member_id: number;
+	paid_amount: number;
+	owed_amount: number;
 }
