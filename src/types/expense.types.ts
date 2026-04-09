@@ -51,7 +51,11 @@ export interface ExpenseMemberRows {
 }
 
 export interface ExpenseDataDB {
-	group: { id: string; name: string };
+	group: {
+		id: string;
+		name: string;
+		color: string;
+	};
 	expense: {
 		title: string;
 		icon: string;
@@ -69,7 +73,11 @@ export interface ExpenseDataDB {
 }
 
 export interface ExpenseData {
-	group: { id: string; name: string; color: string };
+	group: {
+		id: string;
+		name: string;
+		color: string;
+	};
 	expense: {
 		title: string;
 		icon: string;

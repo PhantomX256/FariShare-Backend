@@ -67,10 +67,23 @@ export function formatExpenseData(expenseDataDb: ExpenseDataDB[]): ExpenseData {
 
 	const isPartsMode = expense.split_mode === "parts";
 
+	let minAmount = expenseDataDb[0].expenseMember.owed_amount;
+
+	if (isPartsMode && expenseDataDb.length > 0) {
+		// An easy optimization technique, we use the smallest
+		// owed amount as the base parts and then go from there
+		for (let db of expenseDataDb) {
+			const amt = db.expenseMember.owed_amount;
+			if (amt < minAmount) {
+				minAmount = amt;
+			}
+		}
+	}
+
 	const expenseMembers = expenseDataDb.map(({ expenseMember }) => {
 		let parts = 1;
 		if (isPartsMode)
-			parts = Math.round(expense.amount / expenseMember.owed_amount);
+			parts = Math.round(expenseMember.owed_amount / minAmount);
 
 		return {
 			...expenseMember,
