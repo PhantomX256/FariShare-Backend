@@ -41,6 +41,8 @@ export interface ExpenseRow {
 	amount: number;
 	split_mode: SplitMode;
 	is_transaction: boolean;
+	created_by: number;
+	updated_by: number;
 }
 
 export interface ExpenseMemberRows {
@@ -91,4 +93,27 @@ export interface ExpenseData {
 		owed_amount: number;
 		parts: number;
 	}[];
+}
+
+export interface RecentActivity {
+	expense: {
+		id: string;
+		title: string;
+		icon: string;
+		created_at: Date;
+		updated_at: Date;
+	};
+	group: {
+		name: string;
+		color: string;
+	};
+	created_by: {
+		internal_id: number;
+		name: string | null;
+	};
+	modified_by: {
+		internal_id: number;
+		name: string | null;
+	};
+	user_balance: number;
 }

@@ -8,6 +8,7 @@ import {
 	boolean,
 } from "drizzle-orm/pg-core";
 import { groupsTable } from "./groups.ts";
+import { usersTable } from "./users.ts";
 
 export const expensesTable = pgTable("expenses", {
 	internal_id: serial("internal_id").primaryKey(),
@@ -20,5 +21,16 @@ export const expensesTable = pgTable("expenses", {
 	amount: integer("amount").notNull(),
 	split_mode: text("split_mode"),
 	is_transaction: boolean("is_transaction").default(false).notNull(),
+	created_by: integer("created_by")
+		.notNull()
+		.references(() => usersTable.internal_id),
+
+	updated_by: integer("updated_by")
+		.notNull()
+		.references(() => usersTable.internal_id),
 	created_at: timestamp("created_at").defaultNow().notNull(),
+	updated_at: timestamp("updated_at")
+		.defaultNow()
+		.$onUpdate(() => new Date())
+		.notNull(),
 });

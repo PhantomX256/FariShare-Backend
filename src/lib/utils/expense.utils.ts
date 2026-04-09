@@ -9,6 +9,7 @@ import type {
 export function getExpenseRowForAddExpense(
 	addExpenseRequest: AddExpenseRequest,
 	groupInternalId: number,
+	currentUserInternalId: number,
 ) {
 	const expenseRow: ExpenseRow = {
 		group_id: groupInternalId,
@@ -17,6 +18,8 @@ export function getExpenseRowForAddExpense(
 		amount: addExpenseRequest.amount,
 		split_mode: addExpenseRequest.splitMode,
 		is_transaction: addExpenseRequest.isTransaction,
+		created_by: currentUserInternalId,
+		updated_by: currentUserInternalId,
 	};
 
 	return expenseRow;

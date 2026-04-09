@@ -1,6 +1,7 @@
 import { RESPONSE_STATUS, STATUS_CODES } from "../lib/constants.ts";
 import type { NextFunction, Request, Response } from "express";
 import {
+	fetchRecentActivity,
 	getAllExpenses,
 	validateAndAddExpense,
 	validateAndGetExpenseData,
@@ -74,4 +75,15 @@ export async function getExpenseData(
 	} catch (err) {
 		next(err);
 	}
+}
+
+export async function getRecentActivity(req: Request, res: Response) {
+	const recentActivity = await fetchRecentActivity(req.user!.internal_id);
+	logger.debug(`Fetched recent activity for user: ${req.user!.internal_id}`);
+
+	return res.status(STATUS_CODES.OK).json({
+		recentActivity,
+		status: RESPONSE_STATUS.SUCCESS,
+		message: "Successfully retrieved recent activity",
+	});
 }

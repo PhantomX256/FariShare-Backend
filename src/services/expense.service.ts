@@ -1,7 +1,7 @@
 import db from "../database/client.ts";
 import { expensesTable } from "../database/schemas/expenses.ts";
 import { groupsTable } from "../database/schemas/groups.ts";
-import { and, eq, sql } from "drizzle-orm";
+import { aliasedTable, and, desc, eq, sql } from "drizzle-orm";
 import { groupMembersTable } from "../database/schemas/groupMembers.ts";
 import { APIError } from "../errors/api.error.ts";
 import { STATUS_CODES } from "../lib/constants.ts";
@@ -10,6 +10,7 @@ import type {
 	AddExpenseRequest,
 	Expense,
 	ExpenseDataDB,
+	RecentActivity,
 } from "../types/expense.types.ts";
 import { inArray } from "drizzle-orm/sql/expressions/conditions";
 import {
@@ -122,7 +123,11 @@ export async function validateAndAddExpense(
 		currentUserInternalId,
 	);
 
-	await createExpense(addExpenseRequest, groupInternalId);
+	await createExpense(
+		addExpenseRequest,
+		groupInternalId,
+		currentUserInternalId,
+	);
 }
 
 async function validateAddExpenseRequest(
@@ -217,11 +222,13 @@ async function validateAddExpenseRequest(
 async function createExpense(
 	addExpenseRequest: AddExpenseRequest,
 	groupInternalId: number,
+	currentUserInternalId: number,
 ) {
 	await db!.transaction(async (tx) => {
 		const expenseRow = getExpenseRowForAddExpense(
 			addExpenseRequest,
 			groupInternalId,
+			currentUserInternalId,
 		);
 
 		const [{ internal_id: expenseInternalId }] = await tx
@@ -318,4 +325,85 @@ async function validateExpenseAction(
 			STATUS_CODES.UNAUTHORIZED,
 			"You are not authorized to view this expense",
 		);
+}
+
+export async function fetchRecentActivity(
+	currentUserInternalId: number,
+): Promise<RecentActivity[]> {
+	const createdByUsersTable = aliasedTable(usersTable, "created_by_users");
+	const modifiedByUsersTable = aliasedTable(usersTable, "modified_by_users");
+
+	const currentUserStats = db!.$with("current_user_stats").as(
+		db!
+			.select({
+				expense_id: expenseMembersTable.expense_id,
+				owed_amount: expenseMembersTable.owed_amount,
+				paid_amount: expenseMembersTable.paid_amount,
+			})
+			.from(expenseMembersTable)
+			.innerJoin(
+				groupMembersTable,
+				eq(groupMembersTable.id, expenseMembersTable.member_id),
+			)
+			.where(eq(groupMembersTable.user_id, currentUserInternalId)),
+	);
+
+	const userGroupIds = db!
+		.select({ group_id: groupMembersTable.group_id })
+		.from(groupMembersTable)
+		.where(eq(groupMembersTable.user_id, currentUserInternalId));
+
+	return (
+		db!
+			.with(currentUserStats)
+			.select({
+				expense: {
+					id: expensesTable.id,
+					title: expensesTable.title,
+					icon: expensesTable.icon,
+					created_at: expensesTable.created_at,
+					updated_at: expensesTable.updated_at,
+				},
+				group: {
+					name: groupsTable.name,
+					color: groupsTable.color,
+				},
+				created_by: {
+					internal_id: expensesTable.created_by,
+					name: createdByUsersTable.full_name,
+				},
+				modified_by: {
+					internal_id: expensesTable.updated_by,
+					name: modifiedByUsersTable.full_name,
+				},
+				// Determine the specific user's balance on this individual expense
+				user_balance:
+					sql<number>`COALESCE(${currentUserStats.paid_amount}, 0) - COALESCE(${currentUserStats.owed_amount}, 0)`.mapWith(
+						Number,
+					),
+			})
+			.from(expensesTable)
+			.innerJoin(
+				groupsTable,
+				eq(expensesTable.group_id, groupsTable.internal_id),
+			)
+			.leftJoin(
+				currentUserStats,
+				eq(expensesTable.internal_id, currentUserStats.expense_id),
+			)
+			// Join for created_by
+			.leftJoin(
+				createdByUsersTable,
+				eq(expensesTable.created_by, createdByUsersTable.internal_id),
+			)
+			// Join for modified_by
+			.leftJoin(
+				modifiedByUsersTable,
+				eq(expensesTable.updated_by, modifiedByUsersTable.internal_id),
+			)
+			// Only look at expenses belonging to groups the user is a part of
+			.where(inArray(expensesTable.group_id, userGroupIds))
+			.orderBy(desc(expensesTable.updated_at))
+			.limit(10)
+	);
 }
