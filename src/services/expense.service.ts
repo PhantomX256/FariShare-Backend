@@ -6,12 +6,18 @@ import { groupMembersTable } from "../database/schemas/groupMembers.ts";
 import { APIError } from "../errors/api.error.ts";
 import { STATUS_CODES } from "../lib/constants.ts";
 import { expenseMembersTable } from "../database/schemas/expenseMembers.ts";
-import type { AddExpenseRequest, Expense } from "../types/expense.types.ts";
+import type {
+	AddExpenseRequest,
+	Expense,
+	ExpenseDataDB,
+} from "../types/expense.types.ts";
 import { inArray } from "drizzle-orm/sql/expressions/conditions";
 import {
+	formatExpenseData,
 	getExpenseMemberRowsForAddExpense,
 	getExpenseRowForAddExpense,
 } from "../lib/utils/expense.utils.ts";
+import { usersTable } from "../database/schemas/users.ts";
 
 export async function getAllExpenses(
 	groupId: string,
@@ -230,4 +236,86 @@ async function createExpense(
 
 		await tx.insert(expenseMembersTable).values(expenseMemberRows);
 	});
+}
+
+export async function validateAndGetExpenseData(
+	expenseId: string,
+	currentUserInternalId: number,
+) {
+	await validateExpenseAction(expenseId, currentUserInternalId);
+
+	const result = await getExpenseData(expenseId);
+
+	return formatExpenseData(result);
+}
+
+async function getExpenseData(expenseId: string): Promise<ExpenseDataDB[]> {
+	return db!
+		.select({
+			group: {
+				id: groupsTable.id,
+				name: groupsTable.name,
+				color: groupsTable.color,
+			},
+			expense: {
+				title: expensesTable.title,
+				icon: expensesTable.icon,
+				amount: expensesTable.amount,
+				split_mode: expensesTable.split_mode,
+				created_at: expensesTable.created_at,
+			},
+			expenseMember: {
+				member_id: expenseMembersTable.member_id,
+				name: sql<string>`coalesce(
+					${usersTable.full_name},
+					${groupMembersTable.name}
+                )`,
+				avatar_url: usersTable.avatar_url,
+				paid_amount: expenseMembersTable.paid_amount,
+				owed_amount: expenseMembersTable.owed_amount,
+			},
+		})
+		.from(expensesTable)
+		.innerJoin(
+			expenseMembersTable,
+			eq(expensesTable.internal_id, expenseMembersTable.expense_id),
+		)
+		.innerJoin(
+			groupsTable,
+			eq(expensesTable.group_id, groupsTable.internal_id),
+		)
+		.innerJoin(
+			groupMembersTable,
+			eq(groupMembersTable.id, expenseMembersTable.member_id),
+		)
+		.leftJoin(
+			usersTable,
+			eq(usersTable.internal_id, groupMembersTable.user_id),
+		)
+		.where(eq(expensesTable.id, expenseId));
+}
+
+async function validateExpenseAction(
+	expenseId: string,
+	currentUserInternalId: number,
+) {
+	const [user] = await db!
+		.select({ internal_id: groupMembersTable.user_id })
+		.from(expensesTable)
+		.innerJoin(
+			groupMembersTable,
+			eq(groupMembersTable.group_id, expensesTable.group_id),
+		)
+		.where(
+			and(
+				eq(expensesTable.id, expenseId),
+				eq(groupMembersTable.user_id, currentUserInternalId),
+			),
+		);
+
+	if (!user)
+		throw new APIError(
+			STATUS_CODES.UNAUTHORIZED,
+			"You are not authorized to view this expense",
+		);
 }

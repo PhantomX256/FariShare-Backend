@@ -49,3 +49,38 @@ export interface ExpenseMemberRows {
 	paid_amount: number;
 	owed_amount: number;
 }
+
+export interface ExpenseDataDB {
+	group: { id: string; name: string };
+	expense: {
+		title: string;
+		icon: string;
+		amount: number;
+		split_mode: string | null;
+		created_at: Date;
+	};
+	expenseMember: {
+		member_id: number;
+		name: string;
+		avatar_url: string | null;
+		paid_amount: number;
+		owed_amount: number;
+	};
+}
+
+export interface ExpenseData {
+	group: { id: string; name: string; color: string };
+	expense: {
+		title: string;
+		icon: string;
+		amount: number;
+		split_mode: string | null;
+		created_at: Date;
+	};
+	expenseMembers: {
+		member_id: number;
+		paid_amount: number;
+		owed_amount: number;
+		parts: number;
+	}[];
+}

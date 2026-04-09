@@ -1,5 +1,7 @@
 import type {
 	AddExpenseRequest,
+	ExpenseData,
+	ExpenseDataDB,
 	ExpenseMemberRows,
 	ExpenseRow,
 } from "../../types/expense.types.ts";
@@ -58,4 +60,23 @@ export function getExpenseMemberRowsForAddExpense(
 	}));
 
 	return expenseMemberRows;
+}
+
+export function formatExpenseData(expenseDataDb: ExpenseDataDB[]): ExpenseData {
+	const { group, expense } = expenseDataDb[0];
+
+	const isPartsMode = expense.split_mode === "parts";
+
+	const expenseMembers = expenseDataDb.map(({ expenseMember }) => {
+		let parts = 1;
+		if (isPartsMode)
+			parts = Math.round(expense.amount / expenseMember.owed_amount);
+
+		return {
+			...expenseMember,
+			parts,
+		};
+	});
+
+	return { group, expense, expenseMembers };
 }

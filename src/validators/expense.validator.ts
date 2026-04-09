@@ -61,3 +61,9 @@ export const AddExpenseSchema = z.object({
 		}),
 	}),
 });
+
+export const GetExpenseDataSchema = z.object({
+	params: z.object({
+		expenseId: z.uuid("Invalid Expense Id"),
+	}),
+});
