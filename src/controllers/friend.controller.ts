@@ -5,6 +5,7 @@ import {
 	getAllFriendsOfUser,
 	handleRequestAction,
 	sendRequest,
+	fetchFriendData,
 } from "../services/friend.service.ts";
 import logger from "../lib/utils/logger.ts";
 import { RESPONSE_STATUS, STATUS_CODES } from "../lib/constants.ts";
@@ -43,9 +44,7 @@ export async function sendFriendRequest(
 }
 
 export async function getSentRequests(req: Request, res: Response) {
-	const sentFriendRequests = await getAllSentRequests(
-		req.user!.internal_id,
-	);
+	const sentFriendRequests = await getAllSentRequests(req.user!.internal_id);
 	logger.debug("Retrieved all requests sent by user: " + req.user!.id);
 
 	return res.status(STATUS_CODES.OK).json({
@@ -76,7 +75,12 @@ export async function respondToRequest(
 	try {
 		const { senderId, receiverId, accept } = req.body;
 
-		await handleRequestAction({ senderId, receiverId, accept, userInternalId: req.user!.internal_id });
+		await handleRequestAction({
+			senderId,
+			receiverId,
+			accept,
+			userInternalId: req.user!.internal_id,
+		});
 
 		return res.status(STATUS_CODES.OK).json({
 			status: RESPONSE_STATUS.SUCCESS,
@@ -84,5 +88,31 @@ export async function respondToRequest(
 		});
 	} catch (err) {
 		next(err);
+	}
+}
+
+export async function getFriendData(
+	req: Request,
+	res: Response,
+	next: NextFunction,
+) {
+	const { friendId } = req.query as { friendId: string };
+
+	try {
+		const friendData = await fetchFriendData(
+			friendId,
+			req.user!.internal_id,
+		);
+		logger.debug(
+			"Successfully fetched friend data for friendId: " + friendId,
+		);
+
+		return res.status(STATUS_CODES.OK).json({
+			status: RESPONSE_STATUS.SUCCESS,
+			message: "Fetched friend data",
+			friendData,
+		});
+	} catch (error) {
+		next(error);
 	}
 }

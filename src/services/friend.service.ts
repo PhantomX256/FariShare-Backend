@@ -8,7 +8,15 @@ import { STATUS_CODES } from "../lib/constants.ts";
 import { alias } from "drizzle-orm/pg-core";
 import { getUserDataByEmailOrId } from "./user.service.ts";
 import type { User } from "../types/user.types.ts";
-import type { FriendRequest, Friendship, ReceivedRequest, RequestActionParams, SentRequest } from "../types/friend.types.ts";
+import type {
+	FriendRequest,
+	Friendship,
+	ReceivedRequest,
+	RequestActionParams,
+	SentRequest,
+} from "../types/friend.types.ts";
+import { groupMembersTable } from "../database/schemas/groupMembers.ts";
+import { groupsTable } from "../database/schemas/groups.ts";
 
 /**
  *	Retrieves the internal ids of all friends of the user
@@ -312,4 +320,82 @@ async function removeFriendRequest(senderId: number, receiverId: number) {
 				eq(friendRequestsTable.receiver_id, receiverId),
 			),
 		);
+}
+
+export async function fetchFriendData(
+	friendId: string,
+	currentUserInternalId: number,
+) {
+	const { friendInternalId, friendsSince } = await validateFriendDataRequest(
+		friendId,
+		currentUserInternalId,
+	);
+
+	const sharedGroupsIds = await getSharedGroups(
+		friendInternalId,
+		currentUserInternalId,
+	);
+
+	return {
+		friendsSince,
+		sharedGroupsIds,
+	};
+}
+
+async function validateFriendDataRequest(
+	friendId: string,
+	currentUserInternalId: number,
+) {
+	const [{ internal_id: friendInternalId }] = await db!
+		.select({ internal_id: usersTable.internal_id })
+		.from(usersTable)
+		.where(eq(usersTable.id, friendId));
+
+	if (!friendInternalId)
+		throw new APIError(STATUS_CODES.BAD_REQUEST, "The user doesn't exist");
+
+	const friendship = await getFriendshipByIds(
+		friendInternalId,
+		currentUserInternalId,
+	);
+
+	if (!friendship)
+		throw new APIError(
+			STATUS_CODES.UNAUTHORIZED,
+			"You are not authorized to see this data",
+		);
+
+	return { friendInternalId, friendsSince: friendship.created_at };
+}
+
+async function getSharedGroups(
+	friendInternalId: number,
+	currentUserInternalId: number,
+) {
+	// Alias the groupMembers table for the friend's side of the join
+	const friendGroupMembers = alias(groupMembersTable, "friendGroupMembers");
+
+	// Fetch groups where both users are members
+	const sharedGroupsResult = await db!
+		.select({
+			id: groupsTable.id,
+		})
+		.from(groupsTable)
+		.innerJoin(
+			groupMembersTable,
+			eq(groupMembersTable.group_id, groupsTable.internal_id),
+		)
+		.innerJoin(
+			friendGroupMembers,
+			eq(friendGroupMembers.group_id, groupsTable.internal_id),
+		)
+		.where(
+			and(
+				eq(groupMembersTable.user_id, currentUserInternalId),
+				eq(friendGroupMembers.user_id, friendInternalId),
+			),
+		);
+
+	// Extract just the string IDs from the results
+	return sharedGroupsResult.map((group) => group.id);
 }

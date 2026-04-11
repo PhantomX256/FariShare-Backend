@@ -280,6 +280,7 @@ async function getExpenseData(expenseId: string): Promise<ExpenseDataDB[]> {
 				avatar_url: usersTable.avatar_url,
 				paid_amount: expenseMembersTable.paid_amount,
 				owed_amount: expenseMembersTable.owed_amount,
+				user_id: groupMembersTable.user_id,
 			},
 		})
 		.from(expensesTable)

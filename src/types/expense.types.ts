@@ -71,6 +71,7 @@ export interface ExpenseDataDB {
 		avatar_url: string | null;
 		paid_amount: number;
 		owed_amount: number;
+		user_id: number | null;
 	};
 }
 
@@ -92,6 +93,7 @@ export interface ExpenseData {
 		paid_amount: number;
 		owed_amount: number;
 		parts: number;
+		user_id: number | null;
 	}[];
 }
 

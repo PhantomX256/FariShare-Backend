@@ -11,9 +11,7 @@ export const SendFriendRequestSchema = z.object({
 			}),
 			z.uuid({
 				error: (issue) =>
-					issue.input === undefined
-						? "No ID provided"
-						: "Invalid ID",
+					issue.input === undefined ? "No ID provided" : "Invalid ID",
 			}),
 		]),
 	}),
@@ -39,5 +37,11 @@ export const ModifyFriendRequestSchema = z.object({
 					? "No action provided"
 					: "Invalid action",
 		}),
+	}),
+});
+
+export const GetFriendDataSchema = z.object({
+	query: z.object({
+		friendId: z.uuid("Invalid Friend ID"),
 	}),
 });
