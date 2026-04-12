@@ -12,6 +12,7 @@ import userRoutes from "./routes/user.route.ts";
 import friendRoute from "./routes/friend.route.ts";
 import groupRoute from "./routes/group.route.ts";
 import expenseRoute from "./routes/expense.route.ts";
+import balancesRoute from "./routes/balances.route.ts";
 
 // Create an Express application
 const app = express();
@@ -44,6 +45,7 @@ app.use("/api/app/user", userRoutes);
 app.use("/api/app/friend", friendRoute);
 app.use("/api/app/group", groupRoute);
 app.use("/api/app/expense", expenseRoute);
+app.use("/api/app/balance", balancesRoute);
 
 // Handling all 404 errors
 app.all("*", (req, res, next) => {

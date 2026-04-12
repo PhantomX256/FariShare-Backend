@@ -16,6 +16,8 @@ import type {
 	GroupDataDB,
 	ValidateChangeGroupDataParams,
 } from "../types/group.types.ts";
+import { alias } from "drizzle-orm/pg-core";
+import { expensesTable } from "../database/schemas/expenses.ts";
 
 export async function getAllGroupsOfUser(
 	userInternalId: number,
@@ -380,4 +382,35 @@ async function updateGroupData(
 				.delete(groupMembersTable)
 				.where(inArray(groupMembersTable.id, removeValues));
 	});
+}
+
+export async function getMemberData(
+	memberId: number,
+	currentUserInternalId: number,
+) {
+	const memberGroupMembers = alias(groupMembersTable, "memberGroupMembers");
+
+	const result = await db!
+		.select({
+			sharedExpenses: {
+				internal_id: expensesTable.internal_id,
+			},
+		})
+		.from(memberGroupMembers)
+		.innerJoin(
+			expensesTable,
+			eq(expensesTable.group_id, memberGroupMembers.group_id),
+		)
+		.innerJoin(
+			groupMembersTable,
+			eq(groupMembersTable.group_id, expensesTable.group_id),
+		)
+		.where(
+			and(
+				eq(groupMembersTable.user_id, currentUserInternalId),
+				eq(memberGroupMembers.id, memberId),
+			),
+		);
+
+	return;
 }
