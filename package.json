@@ -9,6 +9,7 @@
     "start": "node src/server.ts"
   },
   "dependencies": {
+    "@datastructures-js/heap": "^4.3.7",
     "cookie-parser": "^1.4.7",
     "cors": "^2.8.6",
     "debug": "^4.4.0",

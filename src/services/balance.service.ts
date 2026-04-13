@@ -6,18 +6,23 @@ import { usersTable } from "../database/schemas/users.ts";
 import { APIError } from "../errors/api.error.ts";
 import { STATUS_CODES } from "../lib/constants.ts";
 import { expenseMembersTable } from "../database/schemas/expenseMembers.ts";
-import type { Balance } from "../types/balance.types.ts";
+import type { Balance, Transaction } from "../types/balance.types.ts";
+import { MaxHeap } from "@datastructures-js/heap";
 
 export async function validateAndFetchGroupBalances(
 	groupId: string,
 	currentUserInternalId: number,
-): Promise<Balance[]> {
+): Promise<{ balances: Balance[]; transactions: Transaction[] }> {
 	const groupInternalId = await validateGroupBalanceRequest(
 		groupId,
 		currentUserInternalId,
 	);
 
-	return fetchGroupBalances(groupInternalId);
+	const balances = await fetchGroupBalances(groupInternalId);
+
+	const transactions = calculateTransactions(balances);
+
+	return { balances, transactions };
 }
 
 async function validateGroupBalanceRequest(
@@ -64,4 +69,40 @@ async function fetchGroupBalances(groupInternalId: number) {
 		)
 		.where(eq(groupMembersTable.group_id, groupInternalId))
 		.groupBy(expenseMembersTable.member_id);
+}
+
+function calculateTransactions(balances: Balance[]) {
+	const owedHeap = new MaxHeap<Balance>((balance) => balance.balance);
+	const debtHeap = new MaxHeap<Balance>((balance) => balance.balance);
+	const transactions: Transaction[] = [];
+
+	for (const { member_id, balance } of balances) {
+		if (balance > 0) {
+			owedHeap.insert({ member_id, balance });
+		} else if (balance < 0) {
+			debtHeap.insert({ member_id, balance: Math.abs(balance) });
+		}
+	}
+
+	while (owedHeap.size() !== 0 && debtHeap.size() !== 0) {
+		const maxOwed = owedHeap.extractRoot()!;
+		const maxDebt = debtHeap.extractRoot()!;
+
+		const diff = maxOwed.balance - maxDebt.balance;
+		const amount = Math.min(maxOwed.balance, maxDebt.balance);
+
+		transactions.push({
+			fromMemberId: maxDebt.member_id,
+			toMemberId: maxOwed.member_id,
+			amount: amount,
+		});
+
+		if (diff > 0) {
+			owedHeap.insert({ ...maxOwed, balance: diff });
+		} else if (diff < 0) {
+			debtHeap.insert({ ...maxDebt, balance: Math.abs(diff) });
+		}
+	}
+
+	return transactions;
 }

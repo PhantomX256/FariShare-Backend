@@ -11,7 +11,7 @@ export async function getGroupBalances(
 	const { groupId } = req.query as { groupId: string };
 
 	try {
-		const balances = await validateAndFetchGroupBalances(
+		const groupBalances = await validateAndFetchGroupBalances(
 			groupId,
 			req.user!.internal_id,
 		);
@@ -20,7 +20,7 @@ export async function getGroupBalances(
 		return res.status(STATUS_CODES.OK).json({
 			status: RESPONSE_STATUS.SUCCESS,
 			message: "Retrieved group balances",
-			balances,
+			groupBalances,
 		});
 	} catch (error) {
 		next(error);
