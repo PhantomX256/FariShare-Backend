@@ -1,4 +1,11 @@
-import { integer, pgTable, serial, text, timestamp, boolean } from "drizzle-orm/pg-core";
+import {
+	integer,
+	pgTable,
+	serial,
+	text,
+	timestamp,
+	boolean,
+} from "drizzle-orm/pg-core";
 import { groupsTable } from "./groups.ts";
 import { usersTable } from "./users.ts";
 
@@ -10,5 +17,6 @@ export const groupMembersTable = pgTable("group_members", {
 	user_id: integer("user_id").references(() => usersTable.internal_id),
 	name: text("name"),
 	is_admin: boolean("is_admin").notNull().default(false),
+	is_active: boolean("is_active").notNull().default(true),
 	joined_at: timestamp("joined_at").defaultNow().notNull(),
 });

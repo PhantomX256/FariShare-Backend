@@ -7,6 +7,7 @@ import {
 } from "../validators/expense.validator.ts";
 import {
 	addExpense,
+	deleteExpense,
 	getExpenseData,
 	getExpenses,
 	getRecentActivity,
@@ -21,6 +22,11 @@ router.get(
 	"/:expenseId",
 	validateMiddleware(GetExpenseDataSchema),
 	getExpenseData,
+);
+router.delete(
+	"/:expenseId",
+	validateMiddleware(GetExpenseDataSchema),
+	deleteExpense,
 );
 
 export default router;

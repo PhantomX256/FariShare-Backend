@@ -5,6 +5,7 @@ import {
 	createAGroup,
 	getAllGroupsOfUser,
 	getGroupDataByGroupId,
+	validateAndGetMemberData,
 } from "../services/group.service.ts";
 import { RESPONSE_STATUS, STATUS_CODES } from "../lib/constants.ts";
 import logger from "../lib/utils/logger.ts";
@@ -28,7 +29,10 @@ export async function createGroup(
 	const { createGroupForm } = req.body;
 
 	try {
-		await createAGroup({ ...createGroupForm, currentUserInternalId: req.user!.internal_id });
+		await createAGroup({
+			...createGroupForm,
+			currentUserInternalId: req.user!.internal_id,
+		});
 		logger.debug("Successfully created a group: " + createGroupForm.name);
 
 		return res.status(STATUS_CODES.CREATED).json({
@@ -38,7 +42,6 @@ export async function createGroup(
 	} catch (err) {
 		next(err);
 	}
-
 }
 
 export async function getGroupData(
@@ -90,7 +93,10 @@ export async function editGroup(
 ) {
 	try {
 		const { editGroupRequest } = req.body;
-		await changeGroupData({ ...editGroupRequest, currentUserInternalId: req.user!.internal_id });
+		await changeGroupData({
+			...editGroupRequest,
+			currentUserInternalId: req.user!.internal_id,
+		});
 		logger.debug("Successfully edited group: " + editGroupRequest.groupId);
 
 		return res.status(STATUS_CODES.OK).json({
@@ -99,5 +105,28 @@ export async function editGroup(
 		});
 	} catch (err) {
 		next(err);
+	}
+}
+
+export async function getMemberData(
+	req: Request,
+	res: Response,
+	next: NextFunction,
+) {
+	const memberId = Number(req.params.memberId);
+
+	try {
+		const memberData = await validateAndGetMemberData(
+			memberId,
+			req.user!.internal_id,
+		);
+
+		return res.status(STATUS_CODES.OK).json({
+			status: RESPONSE_STATUS.SUCCESS,
+			message: "Retrieved member data",
+			memberData,
+		});
+	} catch (error) {
+		next(error);
 	}
 }

@@ -7,7 +7,9 @@ export const expenseMembersTable = pgTable(
 	{
 		expense_id: integer("expense_id")
 			.notNull()
-			.references(() => expensesTable.internal_id),
+			.references(() => expensesTable.internal_id, {
+				onDelete: "cascade",
+			}),
 		member_id: integer("member_id")
 			.notNull()
 			.references(() => groupMembersTable.id),

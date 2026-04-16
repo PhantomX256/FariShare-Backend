@@ -1,6 +1,6 @@
 import db from "../database/client.ts";
 import { groupsTable } from "../database/schemas/groups.ts";
-import { aliasedTable, and, eq, sql } from "drizzle-orm";
+import { aliasedTable, and, eq, not, sql } from "drizzle-orm";
 import { groupMembersTable } from "../database/schemas/groupMembers.ts";
 import { APIError } from "../errors/api.error.ts";
 import { STATUS_CODES } from "../lib/constants.ts";
@@ -14,10 +14,13 @@ import type {
 	Group,
 	GroupData,
 	GroupDataDB,
+	MemberData,
 	ValidateChangeGroupDataParams,
 } from "../types/group.types.ts";
 import { alias } from "drizzle-orm/pg-core";
 import { expensesTable } from "../database/schemas/expenses.ts";
+import { expenseMembersTable } from "../database/schemas/expenseMembers.ts";
+import { getBalanceOfMembers } from "./balance.service.ts";
 
 export async function getAllGroupsOfUser(
 	userInternalId: number,
@@ -163,7 +166,12 @@ async function getGroupMemberDataOfGroup(
 			usersTable,
 			eq(groupMembersTable.user_id, usersTable.internal_id),
 		)
-		.where(eq(groupsTable.id, groupId));
+		.where(
+			and(
+				eq(groupsTable.id, groupId),
+				eq(groupMembersTable.is_active, true),
+			),
+		);
 }
 
 export async function changeGroupGuestName(
@@ -232,7 +240,7 @@ export async function changeGroupData(params: ChangeGroupDataParams) {
 
 		const { group, members } = await getGroupDataByGroupId(params.groupId);
 
-		validateChangeGroupDataAction({ ...params, group, members });
+		await validateChangeGroupDataAction({ ...params, group, members });
 
 		const changedGroupDataFields = getChangedGroupDataFields({
 			...params,
@@ -245,7 +253,9 @@ export async function changeGroupData(params: ChangeGroupDataParams) {
 	}
 }
 
-function validateChangeGroupDataAction(params: ValidateChangeGroupDataParams) {
+async function validateChangeGroupDataAction(
+	params: ValidateChangeGroupDataParams,
+) {
 	const {
 		name,
 		group,
@@ -325,6 +335,17 @@ function validateChangeGroupDataAction(params: ValidateChangeGroupDataParams) {
 			STATUS_CODES.BAD_REQUEST,
 			"You are trying to remove yourself",
 		);
+
+	const balances = await getBalanceOfMembers(
+		removeMembers,
+		group.internal_id,
+	);
+
+	if (balances.some(({ balance }) => balance !== 0))
+		throw new APIError(
+			STATUS_CODES.BAD_REQUEST,
+			"The member you are trying to remove has pending balances",
+		);
 }
 
 function getChangedGroupDataFields(
@@ -379,38 +400,70 @@ async function updateGroupData(
 
 		if (removeValues.length > 0)
 			await tx
-				.delete(groupMembersTable)
+				.update(groupMembersTable)
+				.set({ is_active: false })
 				.where(inArray(groupMembersTable.id, removeValues));
 	});
 }
 
-export async function getMemberData(
+export async function validateAndGetMemberData(
 	memberId: number,
 	currentUserInternalId: number,
 ) {
-	const memberGroupMembers = alias(groupMembersTable, "memberGroupMembers");
+	await validateMemberDataRequest(memberId, currentUserInternalId);
+
+	return fetchMemberData(memberId);
+}
+
+async function validateMemberDataRequest(
+	memberId: number,
+	currentUserInternalId: number,
+) {
+	const targetMember = aliasedTable(groupMembersTable, "target_member");
+	const currentUserMember = aliasedTable(
+		groupMembersTable,
+		"current_user_member",
+	);
 
 	const result = await db!
 		.select({
-			sharedExpenses: {
-				internal_id: expensesTable.internal_id,
-			},
+			groupInternalId: targetMember.group_id,
 		})
-		.from(memberGroupMembers)
+		.from(targetMember)
 		.innerJoin(
-			expensesTable,
-			eq(expensesTable.group_id, memberGroupMembers.group_id),
-		)
-		.innerJoin(
-			groupMembersTable,
-			eq(groupMembersTable.group_id, expensesTable.group_id),
+			currentUserMember,
+			eq(targetMember.group_id, currentUserMember.group_id),
 		)
 		.where(
 			and(
-				eq(groupMembersTable.user_id, currentUserInternalId),
-				eq(memberGroupMembers.id, memberId),
+				eq(targetMember.id, memberId),
+				eq(currentUserMember.user_id, currentUserInternalId),
 			),
-		);
+		)
+		.limit(1);
 
-	return;
+	if (result.length === 0) {
+		throw new APIError(
+			STATUS_CODES.FORBIDDEN,
+			"You do not have access to this member's data or the member does not exist.",
+		);
+	}
+}
+
+async function fetchMemberData(memberId: number): Promise<MemberData[]> {
+	return db!
+		.select({
+			expenseId: expenseMembersTable.expense_id,
+			memberBalance:
+				sql<number>`SUM(${expenseMembersTable.paid_amount}) - SUM(${expenseMembersTable.owed_amount})`.mapWith(
+					Number,
+				),
+		})
+		.from(expenseMembersTable)
+		.innerJoin(
+			expensesTable,
+			eq(expensesTable.internal_id, expenseMembersTable.expense_id),
+		)
+		.where(eq(expenseMembersTable.member_id, memberId))
+		.groupBy(expenseMembersTable.expense_id);
 }

@@ -65,3 +65,9 @@ export const EditGroupSchema = z.object({
 		}),
 	}),
 });
+
+export const GetMemberDataSchema = z.object({
+	params: z.object({
+		memberId: z.int("Invalid Member").gt(0, "Invalid Member"),
+	}),
+});

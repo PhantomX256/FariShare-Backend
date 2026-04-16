@@ -7,7 +7,8 @@ import { APIError } from "../errors/api.error.ts";
 import { STATUS_CODES } from "../lib/constants.ts";
 import { expenseMembersTable } from "../database/schemas/expenseMembers.ts";
 import type { Balance, Transaction } from "../types/balance.types.ts";
-import { MaxHeap } from "@datastructures-js/heap";
+import { Heap } from "@datastructures-js/heap";
+import { inArray } from "drizzle-orm/sql/expressions/conditions";
 
 export async function validateAndFetchGroupBalances(
 	groupId: string,
@@ -56,24 +57,33 @@ async function validateGroupBalanceRequest(
 async function fetchGroupBalances(groupInternalId: number) {
 	return db!
 		.select({
-			member_id: expenseMembersTable.member_id,
+			member_id: groupMembersTable.id,
 			balance:
 				sql<number>`SUM(${expenseMembersTable.paid_amount}) - SUM(${expenseMembersTable.owed_amount})`.mapWith(
 					Number,
 				),
 		})
-		.from(expenseMembersTable)
-		.innerJoin(
-			groupMembersTable,
+		.from(groupMembersTable)
+		.leftJoin(
+			expenseMembersTable,
 			eq(groupMembersTable.id, expenseMembersTable.member_id),
 		)
 		.where(eq(groupMembersTable.group_id, groupInternalId))
-		.groupBy(expenseMembersTable.member_id);
+		.groupBy(groupMembersTable.id)
+		.orderBy(groupMembersTable.id);
 }
 
 function calculateTransactions(balances: Balance[]) {
-	const owedHeap = new MaxHeap<Balance>((balance) => balance.balance);
-	const debtHeap = new MaxHeap<Balance>((balance) => balance.balance);
+	// A robust comparator that ensures we get the same result
+	const comparator = (a: Balance, b: Balance) => {
+		if (a.balance === b.balance) {
+			return a.member_id > b.member_id ? -1 : 1;
+		}
+		return a.balance > b.balance ? 1 : -1;
+	};
+
+	const owedHeap = new Heap<Balance>(comparator);
+	const debtHeap = new Heap<Balance>(comparator);
 	const transactions: Transaction[] = [];
 
 	for (const { member_id, balance } of balances) {
@@ -84,7 +94,7 @@ function calculateTransactions(balances: Balance[]) {
 		}
 	}
 
-	while (owedHeap.size() !== 0 && debtHeap.size() !== 0) {
+	while (owedHeap.size() > 0 && debtHeap.size() > 0) {
 		const maxOwed = owedHeap.extractRoot()!;
 		const maxDebt = debtHeap.extractRoot()!;
 
@@ -105,4 +115,31 @@ function calculateTransactions(balances: Balance[]) {
 	}
 
 	return transactions;
+}
+
+export async function getBalanceOfMembers(
+	memberIds: number[],
+	groupInternalId: number,
+): Promise<Balance[]> {
+	return db!
+		.select({
+			member_id: groupMembersTable.id,
+			balance:
+				sql<number>`SUM(${expenseMembersTable.paid_amount}) - SUM(${expenseMembersTable.owed_amount})`.mapWith(
+					Number,
+				),
+		})
+		.from(groupMembersTable)
+		.leftJoin(
+			expenseMembersTable,
+			eq(groupMembersTable.id, expenseMembersTable.member_id),
+		)
+		.where(
+			and(
+				eq(groupMembersTable.group_id, groupInternalId),
+				inArray(expenseMembersTable.member_id, memberIds),
+			),
+		)
+		.groupBy(groupMembersTable.id)
+		.orderBy(groupMembersTable.id);
 }

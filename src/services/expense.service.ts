@@ -281,6 +281,7 @@ async function getExpenseData(expenseId: string): Promise<ExpenseDataDB[]> {
 				paid_amount: expenseMembersTable.paid_amount,
 				owed_amount: expenseMembersTable.owed_amount,
 				user_id: groupMembersTable.user_id,
+				is_active: groupMembersTable.is_active,
 			},
 		})
 		.from(expensesTable)
@@ -407,4 +408,19 @@ export async function fetchRecentActivity(
 			.orderBy(desc(expensesTable.updated_at))
 			.limit(10)
 	);
+}
+
+export async function removeExpense(
+	expenseId: string,
+	currentUserInternalId: number,
+) {
+	await validateExpenseAction(expenseId, currentUserInternalId);
+
+	const [deletedExpense] = await db!
+		.delete(expensesTable)
+		.where(eq(expensesTable.id, expenseId))
+		.returning({ internal_id: expensesTable.internal_id });
+
+	if (!deletedExpense)
+		throw new APIError(STATUS_CODES.BAD_REQUEST, "Expense does not exist");
 }

@@ -3,6 +3,7 @@ import type { NextFunction, Request, Response } from "express";
 import {
 	fetchRecentActivity,
 	getAllExpenses,
+	removeExpense,
 	validateAndAddExpense,
 	validateAndGetExpenseData,
 } from "../services/expense.service.ts";
@@ -86,4 +87,26 @@ export async function getRecentActivity(req: Request, res: Response) {
 		status: RESPONSE_STATUS.SUCCESS,
 		message: "Successfully retrieved recent activity",
 	});
+}
+
+export async function deleteExpense(
+	req: Request,
+	res: Response,
+	next: NextFunction,
+) {
+	const expenseId = req.params.expenseId as string;
+
+	try {
+		await removeExpense(expenseId, req.user!.internal_id);
+		logger.debug(
+			`User: ${req.user!.internal_id} deleted expense: ${expenseId}`,
+		);
+
+		return res.status(STATUS_CODES.OK).json({
+			status: RESPONSE_STATUS.SUCCESS,
+			message: "Deleted expenses",
+		});
+	} catch (error) {
+		next(error);
+	}
 }

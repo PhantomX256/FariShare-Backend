@@ -72,6 +72,7 @@ export interface ExpenseDataDB {
 		paid_amount: number;
 		owed_amount: number;
 		user_id: number | null;
+		is_active: boolean;
 	};
 }
 
@@ -94,6 +95,7 @@ export interface ExpenseData {
 		owed_amount: number;
 		parts: number;
 		user_id: number | null;
+		is_active: boolean;
 	}[];
 }
 

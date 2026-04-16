@@ -90,3 +90,8 @@ export interface ChangedGroupDataFields {
 	)[];
 	removeValues: number[];
 }
+
+export interface MemberData {
+	expenseId: number;
+	memberBalance: number;
+}
