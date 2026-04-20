@@ -68,6 +68,8 @@ export function getExpenseMemberRowsForAddExpense(
 export function formatExpenseData(expenseDataDb: ExpenseDataDB[]): ExpenseData {
 	const { group, expense } = expenseDataDb[0];
 
+	let is_modifiable = true;
+
 	const isPartsMode = expense.split_mode === "parts";
 
 	let minAmount = expenseDataDb[0].expenseMember.owed_amount;
@@ -84,6 +86,8 @@ export function formatExpenseData(expenseDataDb: ExpenseDataDB[]): ExpenseData {
 	}
 
 	const expenseMembers = expenseDataDb.map(({ expenseMember }) => {
+		if (!expenseMember.is_active) is_modifiable = false;
+
 		let parts = 1;
 		if (isPartsMode)
 			parts = Math.round(expenseMember.owed_amount / minAmount);
@@ -94,5 +98,5 @@ export function formatExpenseData(expenseDataDb: ExpenseDataDB[]): ExpenseData {
 		};
 	});
 
-	return { group, expense, expenseMembers };
+	return { group, expense: { is_modifiable, ...expense }, expenseMembers };
 }

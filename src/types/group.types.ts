@@ -89,6 +89,7 @@ export interface ChangedGroupDataFields {
 		  }
 	)[];
 	removeValues: number[];
+	activateUserValues: number[];
 }
 
 export interface MemberData {

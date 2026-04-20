@@ -88,6 +88,7 @@ export interface ExpenseData {
 		amount: number;
 		split_mode: string | null;
 		created_at: Date;
+		is_modifiable: boolean;
 	};
 	expenseMembers: {
 		member_id: number;

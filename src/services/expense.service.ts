@@ -324,8 +324,8 @@ async function validateExpenseAction(
 
 	if (!user)
 		throw new APIError(
-			STATUS_CODES.UNAUTHORIZED,
-			"You are not authorized to view this expense",
+			STATUS_CODES.NOT_FOUND,
+			"The expense does not exist",
 		);
 }
 

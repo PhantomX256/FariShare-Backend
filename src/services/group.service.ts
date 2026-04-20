@@ -348,9 +348,9 @@ async function validateChangeGroupDataAction(
 		);
 }
 
-function getChangedGroupDataFields(
+async function getChangedGroupDataFields(
 	params: ChangedGroupDataFieldsParams,
-): ChangedGroupDataFields {
+): Promise<ChangedGroupDataFields> {
 	const { name, group, removeMembers, newUsers, newGuests, icon, color } =
 		params;
 
@@ -360,8 +360,28 @@ function getChangedGroupDataFields(
 	if (icon && icon !== group.icon) groupValues.icon = icon;
 	if (color && color !== group.color) groupValues.color = color;
 
+	const inactiveUsers = await db!
+		.select({
+			memberId: groupMembersTable.id,
+			userId: groupMembersTable.user_id,
+		})
+		.from(groupMembersTable)
+		.where(
+			and(
+				eq(groupMembersTable.group_id, group.internal_id),
+				eq(groupMembersTable.is_active, false),
+				inArray(groupMembersTable.user_id, newUsers),
+			),
+		);
+
+	const inactiveUsersIds = new Set(inactiveUsers.map((m) => m.userId));
+
+	const activateUserValues = inactiveUsers.map((m) => m.memberId);
+
+	const newFilteredUsers = newUsers.filter((m) => !inactiveUsersIds.has(m));
+
 	// Get member values in inserting format
-	const userValues = newUsers.map((userInternalId) => ({
+	const userValues = newFilteredUsers.map((userInternalId) => ({
 		group_id: group.internal_id,
 		user_id: userInternalId,
 		is_admin: false,
@@ -379,6 +399,7 @@ function getChangedGroupDataFields(
 		groupValues: Object.keys(groupValues).length > 0 ? groupValues : null,
 		memberValues,
 		removeValues: removeMembers,
+		activateUserValues,
 	};
 }
 
@@ -386,7 +407,8 @@ async function updateGroupData(
 	changedGroupDataFields: ChangedGroupDataFields,
 	groupId: string,
 ) {
-	const { groupValues, removeValues, memberValues } = changedGroupDataFields;
+	const { groupValues, removeValues, memberValues, activateUserValues } =
+		changedGroupDataFields;
 
 	await db!.transaction(async (tx) => {
 		if (groupValues)
@@ -403,6 +425,12 @@ async function updateGroupData(
 				.update(groupMembersTable)
 				.set({ is_active: false })
 				.where(inArray(groupMembersTable.id, removeValues));
+
+		if (activateUserValues.length > 0)
+			await tx
+				.update(groupMembersTable)
+				.set({ is_active: true })
+				.where(inArray(groupMembersTable.id, activateUserValues));
 	});
 }
 
