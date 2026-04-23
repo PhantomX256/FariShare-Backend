@@ -8,15 +8,21 @@ import { STATUS_CODES } from "../lib/constants.ts";
 import { expenseMembersTable } from "../database/schemas/expenseMembers.ts";
 import type {
 	AddExpenseRequest,
+	ChangedExpenseFields,
+	EditExpenseRequest,
 	Expense,
 	ExpenseDataDB,
 	RecentActivity,
 } from "../types/expense.types.ts";
 import { inArray } from "drizzle-orm/sql/expressions/conditions";
 import {
+	convertExpenseMembersToMap,
+	formatExpenseByIdResult,
 	formatExpenseData,
-	getExpenseMemberRowsForAddExpense,
+	getExpenseMemberRows,
 	getExpenseRowForAddExpense,
+	getInsertMemberRows,
+	shouldModify,
 } from "../lib/utils/expense.utils.ts";
 import { usersTable } from "../database/schemas/users.ts";
 
@@ -118,7 +124,7 @@ export async function validateAndAddExpense(
 	addExpenseRequest: AddExpenseRequest,
 	currentUserInternalId: number,
 ) {
-	const groupInternalId = await validateAddExpenseRequest(
+	const groupInternalId = await validateExpenseRequest(
 		addExpenseRequest,
 		currentUserInternalId,
 	);
@@ -130,27 +136,27 @@ export async function validateAndAddExpense(
 	);
 }
 
-async function validateAddExpenseRequest(
-	addExpenseRequest: AddExpenseRequest,
+async function validateExpenseRequest(
+	expenseRequest: AddExpenseRequest | EditExpenseRequest,
 	currentUserInternalId: number,
 ) {
 	const groupInternalId = await validateGroupRequest(
-		addExpenseRequest.groupId,
+		expenseRequest.groupId,
 		currentUserInternalId,
 	);
 
 	// If the expense request is a transaction then it is wrong
-	if (addExpenseRequest.isTransaction)
+	if (expenseRequest.isTransaction)
 		throw new APIError(
 			STATUS_CODES.BAD_REQUEST,
 			"Adding a transaction in expense url",
 		);
 
-	const totalPaidAmount = addExpenseRequest.paidBy.reduce(
+	const totalPaidAmount = expenseRequest.paidBy.reduce(
 		(sum, p) => sum + p.paidAmount,
 		0,
 	);
-	const totalOwedAmount = addExpenseRequest.membersInvolved.reduce(
+	const totalOwedAmount = expenseRequest.membersInvolved.reduce(
 		(sum, m) => sum + m.owedAmount,
 		0,
 	);
@@ -159,7 +165,7 @@ async function validateAddExpenseRequest(
 	// and the Expense Amount then it is invalid
 	if (
 		totalOwedAmount !== totalPaidAmount ||
-		totalPaidAmount !== addExpenseRequest.amount
+		totalPaidAmount !== expenseRequest.amount
 	)
 		throw new APIError(
 			STATUS_CODES.BAD_REQUEST,
@@ -168,31 +174,29 @@ async function validateAddExpenseRequest(
 
 	// Handle a neat situation where the payer is the only member in the expense
 	if (
-		addExpenseRequest.paidBy.length === 1 &&
-		addExpenseRequest.membersInvolved.length === 1 &&
-		addExpenseRequest.paidBy[0].memberId ===
-			addExpenseRequest.membersInvolved[0].memberId
+		expenseRequest.paidBy.length === 1 &&
+		expenseRequest.membersInvolved.length === 1 &&
+		expenseRequest.paidBy[0].memberId ===
+			expenseRequest.membersInvolved[0].memberId
 	)
 		throw new APIError(
 			STATUS_CODES.BAD_REQUEST,
 			"The payer is the only member involved in the expense",
 		);
 
-	const allPayerIds = new Set(
-		addExpenseRequest.paidBy.map((p) => p.memberId),
-	);
+	const allPayerIds = new Set(expenseRequest.paidBy.map((p) => p.memberId));
 
-	if (allPayerIds.size !== addExpenseRequest.paidBy.length)
+	if (allPayerIds.size !== expenseRequest.paidBy.length)
 		throw new APIError(
 			STATUS_CODES.BAD_REQUEST,
 			"There are duplicates in Paid By",
 		);
 
 	const allInvolvedIds = new Set(
-		addExpenseRequest.membersInvolved.map((m) => m.memberId),
+		expenseRequest.membersInvolved.map((m) => m.memberId),
 	);
 
-	if (allInvolvedIds.size !== addExpenseRequest.membersInvolved.length)
+	if (allInvolvedIds.size !== expenseRequest.membersInvolved.length)
 		throw new APIError(
 			STATUS_CODES.BAD_REQUEST,
 			"There are duplicates in Members Involved",
@@ -216,6 +220,34 @@ async function validateAddExpenseRequest(
 			"One or more of the members you have selected don't exist",
 		);
 
+	if ("expenseId" in expenseRequest) {
+		const [expense] = await db!
+			.select()
+			.from(expensesTable)
+			.innerJoin(
+				expenseMembersTable,
+				eq(expenseMembersTable.expense_id, expensesTable.internal_id),
+			)
+			.innerJoin(
+				groupMembersTable,
+				eq(groupMembersTable.id, expenseMembersTable.member_id),
+			)
+			.where(
+				and(
+					eq(expensesTable.id, expenseRequest.expenseId),
+					eq(groupMembersTable.user_id, currentUserInternalId),
+					eq(expensesTable.is_transaction, false),
+				),
+			)
+			.limit(1);
+
+		if (!expense)
+			throw new APIError(
+				STATUS_CODES.NOT_FOUND,
+				"Expense does not exist or you are not a part of this expense",
+			);
+	}
+
 	return groupInternalId;
 }
 
@@ -236,12 +268,200 @@ async function createExpense(
 			.values(expenseRow)
 			.returning({ internal_id: expensesTable.internal_id });
 
-		const expenseMemberRows = getExpenseMemberRowsForAddExpense(
+		const expenseMemberRows = getExpenseMemberRows(
 			addExpenseRequest,
 			expenseInternalId,
 		);
 
 		await tx.insert(expenseMembersTable).values(expenseMemberRows);
+	});
+}
+
+export async function validateAndEditExpense(
+	editExpenseRequest: EditExpenseRequest,
+	currentUserInternalId: number,
+) {
+	await validateExpenseRequest(editExpenseRequest, currentUserInternalId);
+
+	const changedExpenseFields =
+		await getChangedExpenseFields(editExpenseRequest);
+
+	if (shouldModify(changedExpenseFields))
+		await changeExpenseData(changedExpenseFields, currentUserInternalId);
+}
+
+async function getChangedExpenseFields(editExpenseRequest: EditExpenseRequest) {
+	const { expense, expenseMembers: originalExpenseMembers } =
+		await getExpenseById(editExpenseRequest.expenseId);
+
+	const originalBalancesMap = convertExpenseMembersToMap(
+		originalExpenseMembers,
+	);
+
+	if (!expense.is_modifiable)
+		throw new APIError(
+			STATUS_CODES.FORBIDDEN,
+			"This expense cannot be modified because it contains a member(s) that is no longer a part of this group",
+		);
+
+	const newExpenseMembers = getExpenseMemberRows(
+		editExpenseRequest,
+		expense.internal_id,
+	);
+
+	const changedExpenseFields: ChangedExpenseFields = {
+		expense: {
+			internal_id: expense.internal_id,
+		},
+		membersToAdd: [],
+		membersToEdit: [],
+		membersToRemove: [],
+	};
+
+	if (expense.title !== editExpenseRequest.title)
+		changedExpenseFields.expense = {
+			...changedExpenseFields.expense,
+			title: editExpenseRequest.title,
+		};
+
+	if (expense.amount !== editExpenseRequest.amount)
+		changedExpenseFields.expense = {
+			...changedExpenseFields.expense,
+			amount: editExpenseRequest.amount,
+		};
+
+	if (expense.split_mode !== editExpenseRequest.splitMode)
+		changedExpenseFields.expense = {
+			...changedExpenseFields.expense,
+			split_mode: editExpenseRequest.splitMode,
+		};
+
+	if (expense.icon !== editExpenseRequest.icon)
+		changedExpenseFields.expense = {
+			...changedExpenseFields.expense,
+			icon: editExpenseRequest.icon,
+		};
+
+	for (const expenseMember of newExpenseMembers) {
+		const originalExpenseMember = originalBalancesMap.get(
+			expenseMember.member_id,
+		);
+
+		// Check if the expenseMember was a part of the expense
+		// and if so are the values for owed_amount and paid_amount different
+		if (originalExpenseMember) {
+			if (
+				originalExpenseMember.owed_amount !==
+					expenseMember.owed_amount ||
+				originalExpenseMember.paid_amount !== expenseMember.paid_amount
+			)
+				changedExpenseFields.membersToEdit.push({
+					member_id: expenseMember.member_id,
+					paid_amount: expenseMember.paid_amount,
+					owed_amount: expenseMember.owed_amount,
+				});
+
+			// Remove the member from balances map
+			originalBalancesMap.delete(expenseMember.member_id);
+		}
+
+		// If the expenseMember wasn't a part of the expense add them
+		if (!originalExpenseMember)
+			changedExpenseFields.membersToAdd.push({
+				expense_id: expense.internal_id,
+				member_id: expenseMember.member_id,
+				owed_amount: expenseMember.owed_amount,
+				paid_amount: expenseMember.paid_amount,
+			});
+	}
+
+	// After checking all members in balances map if any members remain
+	// those members are to be removed from the expense
+	if (originalBalancesMap.size > 0) {
+		for (const member_id of originalBalancesMap.keys())
+			changedExpenseFields.membersToRemove.push(member_id);
+	}
+
+	return changedExpenseFields;
+}
+
+async function getExpenseById(expenseId: string) {
+	const expenseByIdResult = await db!
+		.select({
+			expense: {
+				internal_id: expensesTable.internal_id,
+				title: expensesTable.title,
+				icon: expensesTable.icon,
+				amount: expensesTable.amount,
+				split_mode: expensesTable.split_mode,
+				created_at: expensesTable.created_at,
+			},
+			expenseMember: {
+				member_id: expenseMembersTable.member_id,
+				paid_amount: expenseMembersTable.paid_amount,
+				owed_amount: expenseMembersTable.owed_amount,
+				is_active: groupMembersTable.is_active,
+			},
+		})
+		.from(expensesTable)
+		.innerJoin(
+			expenseMembersTable,
+			eq(expenseMembersTable.expense_id, expensesTable.internal_id),
+		)
+		.innerJoin(
+			groupMembersTable,
+			eq(groupMembersTable.id, expenseMembersTable.member_id),
+		)
+		.where(eq(expensesTable.id, expenseId));
+
+	return formatExpenseByIdResult(expenseByIdResult);
+}
+
+async function changeExpenseData(
+	changedExpenseFields: ChangedExpenseFields,
+	currentUserInternalId: number,
+) {
+	await db!.transaction(async (tx) => {
+		// If there are any keys other than internal_id then the expense data
+		// is new update expense data
+		if (
+			Object.keys(changedExpenseFields.expense).some(
+				(key) => key !== "internal_id",
+			)
+		) {
+			await tx
+				.update(expensesTable)
+				.set({
+					...changedExpenseFields.expense,
+					updated_by: currentUserInternalId,
+				})
+				.where(
+					eq(
+						expensesTable.internal_id,
+						changedExpenseFields.expense.internal_id,
+					),
+				);
+		}
+
+		// If there are members to add, edit or remove then
+		if (
+			changedExpenseFields.membersToAdd.length > 0 ||
+			changedExpenseFields.membersToEdit.length > 0 ||
+			changedExpenseFields.membersToRemove.length > 0
+		) {
+			const insertMemberRows = getInsertMemberRows(changedExpenseFields);
+
+			await tx
+				.delete(expenseMembersTable)
+				.where(
+					eq(
+						expenseMembersTable.expense_id,
+						changedExpenseFields.expense.internal_id,
+					),
+				);
+
+			await tx.insert(expenseMembersTable).values(insertMemberRows);
+		}
 	});
 }
 

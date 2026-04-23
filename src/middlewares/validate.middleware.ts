@@ -17,7 +17,6 @@ export function validateMiddleware(schema: ZodType) {
 				query: req.query,
 				params: req.params,
 			});
-
 			logger.debug("Schema verified for endpoint: " + req.originalUrl);
 
 			// If all goes well pass control

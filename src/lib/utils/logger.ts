@@ -29,7 +29,7 @@ class Logger {
 		this.log("WARN", msg);
 	}
 
-	error(msg: string): void {
+	error(msg: string | any): void {
 		this.log("ERROR", msg);
 	}
 

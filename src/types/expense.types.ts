@@ -11,8 +11,16 @@ export interface Expense {
 	paid_by: number[];
 }
 
-export interface AddExpenseRequest {
+export interface AddExpenseRequest extends ExpenseRequest {
 	groupId: string;
+}
+
+export interface EditExpenseRequest extends ExpenseRequest {
+	expenseId: string;
+	groupId: string;
+}
+
+interface ExpenseRequest {
 	title: string;
 	icon: string;
 	amount: number;
@@ -98,6 +106,55 @@ export interface ExpenseData {
 		user_id: number | null;
 		is_active: boolean;
 	}[];
+}
+
+export interface ExpenseByIdResult {
+	expense: {
+		internal_id: number;
+		title: string;
+		icon: string;
+		amount: number;
+		split_mode: string | null;
+		created_at: Date;
+	};
+	expenseMember: {
+		member_id: number;
+		paid_amount: number;
+		owed_amount: number;
+		is_active: boolean;
+	};
+}
+
+export interface FormattedExpenseByIdResult {
+	expense: {
+		internal_id: number;
+		title: string;
+		icon: string;
+		amount: number;
+		split_mode: string | null;
+		created_at: Date;
+		is_modifiable: boolean;
+	};
+	expenseMembers: {
+		parts: number;
+		member_id: number;
+		paid_amount: number;
+		owed_amount: number;
+		is_active: boolean;
+	}[];
+}
+
+export interface ChangedExpenseFields {
+	expense: {
+		internal_id: number;
+		title?: string;
+		icon?: string;
+		amount?: number;
+		split_mode?: string;
+	};
+	membersToAdd: ExpenseMemberRows[];
+	membersToRemove: number[];
+	membersToEdit: Omit<ExpenseMemberRows, "expense_id">[];
 }
 
 export interface RecentActivity {

@@ -5,9 +5,11 @@ import {
 	getAllExpenses,
 	removeExpense,
 	validateAndAddExpense,
+	validateAndEditExpense,
 	validateAndGetExpenseData,
 } from "../services/expense.service.ts";
 import logger from "../lib/utils/logger.ts";
+import type { EditExpenseRequest } from "../types/expense.types.ts";
 
 export async function getExpenses(
 	req: Request,
@@ -49,6 +51,30 @@ export async function addExpense(
 		});
 	} catch (err) {
 		next(err);
+	}
+}
+
+export async function editExpense(
+	req: Request,
+	res: Response,
+	next: NextFunction,
+) {
+	const { editExpenseRequest } = req.body as {
+		editExpenseRequest: EditExpenseRequest;
+	};
+
+	try {
+		await validateAndEditExpense(editExpenseRequest, req.user!.internal_id);
+		logger.debug(
+			`User ${req.user!.internal_id} edited expense ${editExpenseRequest.expenseId}`,
+		);
+
+		return res.status(STATUS_CODES.OK).json({
+			status: RESPONSE_STATUS.SUCCESS,
+			message: "Successfully edited expense",
+		});
+	} catch (error) {
+		next(error);
 	}
 }
 
